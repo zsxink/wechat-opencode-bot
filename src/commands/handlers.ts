@@ -18,6 +18,7 @@ const HELP_TEXT = `可用命令：
 配置：
   /cwd [路径]       查看或切换工作目录
   /model [名称]     查看或切换 OpenCode 模型
+  /models           列出可用的模型
   /permission [模式] 查看或切换权限模式
 
 其他：
@@ -181,6 +182,44 @@ export function handleUndo(ctx: CommandContext, args: string): CommandResult {
   ctx.session.chatHistory = history.slice(0, -actualCount);
   ctx.updateSession({ chatHistory: ctx.session.chatHistory });
   return { reply: `✅ 已撤销最近 ${actualCount} 条对话`, handled: true };
+}
+
+export async function handleModels(ctx: CommandContext): Promise<CommandResult> {
+  const OPENCODE_URL = process.env.OPENCODE_URL || 'http://localhost:4096';
+
+  try {
+    const res = await fetch(`${OPENCODE_URL}/config/providers`);
+    if (!res.ok) {
+      throw new Error(`Failed to fetch providers: ${res.status}`);
+    }
+
+    const data = await res.json() as any;
+    const providers = data.providers || [];
+
+    if (providers.length === 0) {
+      return { reply: '⚠️ 未找到可用的模型提供商', handled: true };
+    }
+
+    const lines: string[] = ['📋 可用模型：', ''];
+
+    for (const provider of providers) {
+      lines.push(`【${provider.name || provider.id}】`);
+      const models = provider.models || [];
+      for (const model of models) {
+        lines.push(`  - ${model.id}`);
+      }
+      lines.push('');
+    }
+
+    const currentModel = ctx.session.model;
+    if (currentModel) {
+      lines.push(`当前模型: ${currentModel}`);
+    }
+
+    return { reply: lines.join('\n'), handled: true };
+  } catch (err) {
+    return { reply: `⚠️ 获取模型列表失败: ${String(err)}`, handled: true };
+  }
 }
 
 export function handleVersion(): CommandResult {

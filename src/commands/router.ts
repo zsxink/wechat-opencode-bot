@@ -1,6 +1,6 @@
 import type { Session } from '../session.js';
 import { logger } from '../logger.js';
-import { handleHelp, handleClear, handleCwd, handleModel, handlePermission, handleStatus, handleSkills, handleHistory, handleReset, handleCompact, handleUndo, handleVersion, handleUnknown, handleNew } from './handlers.js';
+import { handleHelp, handleClear, handleCwd, handleModel, handleModels, handlePermission, handleStatus, handleSkills, handleHistory, handleReset, handleCompact, handleUndo, handleVersion, handleUnknown, handleNew } from './handlers.js';
 
 export interface CommandContext {
   accountId: string;
@@ -55,6 +55,8 @@ export async function routeCommand(ctx: CommandContext): Promise<CommandResult> 
       return handleCwd(ctx, args);
     case 'model':
       return handleModel(ctx, args);
+    case 'models':
+      return await handleModels(ctx);
     case 'permission':
       return handlePermission(ctx, args);
     case 'status':
