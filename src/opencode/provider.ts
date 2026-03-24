@@ -28,7 +28,6 @@ export async function initOpenCode(): Promise<void> {
       baseUrl: OPENCODE_URL,
     });
 
-    // Verify connection using health endpoint
     const health = await client.global.health();
     if (!health.data || health.error) {
       throw new Error("Health check failed");
@@ -47,6 +46,49 @@ export async function initOpenCode(): Promise<void> {
   }
 }
 
+async function createSession(title: string): Promise<string> {
+  const res = await fetch(`${OPENCODE_URL}/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error(`Failed to create session: ${res.status}`);
+  const data = await res.json() as any;
+  return data.id;
+}
+
+async function sendPrompt(sessionId: string, parts: any[], model?: string): Promise<string> {
+  const body: any = { parts };
+  if (model) {
+    body.model = { providerID: "anthropic", modelID: model };
+  }
+
+  const res = await fetch(`${OPENCODE_URL}/session/${sessionId}/prompt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Prompt failed: ${res.status} - ${text}`);
+  }
+
+  const data = await res.json() as any;
+
+  let responseText = "";
+  if (data.parts) {
+    responseText = data.parts
+      .filter((p: any) => p.type === "text" && p.text)
+      .map((p: any) => p.text)
+      .join("\n");
+  } else if (data.info?.text) {
+    responseText = data.info.text;
+  }
+
+  return responseText;
+}
+
 export async function openCodeQuery(options: QueryOptions): Promise<QueryResult> {
   if (!client) {
     await initOpenCode();
@@ -62,68 +104,31 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
   });
 
   try {
-    if (!client) {
-      await initOpenCode();
-    }
-
     let sessionId = resume || "";
     if (!sessionId) {
-      const session = await client.session.create({
-        body: { title: "WeChat Bot Session" },
-      });
-      if (!session || !session.id) {
-        throw new Error("Failed to create session");
-      }
-      sessionId = session.id;
+      sessionId = await createSession("WeChat Bot Session");
     }
 
-    const parts: any[] = [
-      { type: "text", text: prompt },
-    ];
+    const parts: any[] = [{ type: "text", text: prompt }];
 
     if (images?.length) {
       for (const img of images) {
-        parts.push({
-          type: "image",
-          source: img.source,
-        });
+        parts.push({ type: "image", source: img.source });
       }
     }
 
-    const result = await client.session.prompt({
-      path: { id: sessionId },
-      body: {
-        parts,
-        model: model ? { providerID: "anthropic", modelID: model } : undefined,
-      },
-    });
-
-    // Extract text from response parts
-    let text = "";
-    if (result && result.parts) {
-      text = result.parts
-        .filter((p: any) => p.type === "text" && p.text)
-        .map((p: any) => p.text)
-        .join("\n");
-    }
+    const text = await sendPrompt(sessionId, parts, model);
 
     logger.info("OpenCode query completed", {
       sessionId,
       textLength: text.length,
     });
 
-    return {
-      text,
-      sessionId,
-    };
+    return { text, sessionId };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     logger.error("OpenCode query failed", { error: errorMessage });
-    return {
-      text: "",
-      sessionId: "",
-      error: errorMessage,
-    };
+    return { text: "", sessionId: "", error: errorMessage };
   }
 }
 
