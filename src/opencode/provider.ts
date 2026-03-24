@@ -1,4 +1,4 @@
-import { createOpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 import { logger } from "../logger.js";
 
 export interface QueryOptions {
@@ -28,7 +28,7 @@ export async function initOpenCode(): Promise<void> {
       baseUrl: OPENCODE_URL,
     });
 
-    // Verify connection
+    // Verify connection using v2 health endpoint
     const health = await client.global.health();
     if (!health.data || health.error) {
       throw new Error("Health check failed");
@@ -74,7 +74,11 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
       if (sessionResult.error) {
         throw new Error(String(sessionResult.error));
       }
-      sessionId = sessionResult.data.info.id;
+      // v2 version returns session directly
+      sessionId = sessionResult.data?.id || sessionResult.data?.info?.id || "";
+      if (!sessionId) {
+        throw new Error("Failed to get session ID from create response");
+      }
     }
 
     const parts: any[] = [
