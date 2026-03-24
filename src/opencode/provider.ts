@@ -38,13 +38,20 @@ export async function initOpenCode(): Promise<void> {
 }
 
 async function createSession(title: string): Promise<string> {
+  logger.info("Creating OpenCode session", { title });
   const res = await fetch(`${OPENCODE_URL}/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
   });
-  if (!res.ok) throw new Error(`Failed to create session: ${res.status}`);
+  logger.info("Session create response", { status: res.status, contentType: res.headers.get("content-type") });
+  if (!res.ok) {
+    const text = await res.text();
+    logger.error("Session create failed", { status: res.status, body: text });
+    throw new Error(`Failed to create session: ${res.status} - ${text}`);
+  }
   const data = await res.json() as any;
+  logger.info("Session created", { id: data.id });
   return data.id;
 }
 
@@ -54,18 +61,33 @@ async function sendPrompt(sessionId: string, parts: any[], model?: string): Prom
     body.model = { providerID: "anthropic", modelID: model };
   }
 
-  const res = await fetch(`${OPENCODE_URL}/session/${sessionId}/prompt`, {
+  const url = `${OPENCODE_URL}/session/${sessionId}/message`;
+  logger.info("Sending prompt", { sessionId, url, partsCount: parts.length });
+
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 
+  logger.info("Prompt response", { status: res.status, contentType: res.headers.get("content-type") });
+
   if (!res.ok) {
     const text = await res.text();
+    logger.error("Prompt failed", { status: res.status, body: text.substring(0, 200) });
     throw new Error(`Prompt failed: ${res.status} - ${text}`);
   }
 
-  const data = await res.json() as any;
+  const text = await res.text();
+  logger.info("Raw response", { length: text.length, preview: text.substring(0, 100) });
+
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch (e) {
+    logger.error("JSON parse failed", { text: text.substring(0, 200) });
+    throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+  }
 
   let responseText = "";
   if (data.parts) {

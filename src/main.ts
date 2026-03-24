@@ -1,15 +1,13 @@
 import { createInterface } from 'node:readline';
 import process from 'node:process';
-import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { unlinkSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync } from 'node:fs';
 
-import { WeChatApi } from './wechat/api.js';
-import { loadLatestAccount, type AccountData } from './wechat/accounts.js';
-import { startQrLogin, waitForQrScan } from './wechat/login.js';
+import { loadLatestAccount } from './wechat/accounts.js';
+import { startQrLogin, waitForQrScan, displayQrInTerminal } from './wechat/login.js';
 import { createMonitor, type MonitorCallbacks } from './wechat/monitor.js';
 import { createSender } from './wechat/send.js';
-import { downloadImage, extractText, extractFirstImageUrl } from './wechat/media.js';
+import { extractText, extractFirstImageUrl } from './wechat/media.js';
 import { createSessionStore, type Session } from './session.js';
 import { createPermissionBroker } from './permission.js';
 import { routeCommand, type CommandContext, type CommandResult } from './commands/router.js';
@@ -18,6 +16,9 @@ import { loadConfig, saveConfig } from './config.js';
 import { logger } from './logger.js';
 import { DATA_DIR } from './constants.js';
 import { MessageType, type WeixinMessage } from './wechat/types.js';
+import { WeChatApi } from './wechat/api.js';
+import { downloadImage } from './wechat/media.js';
+import type { AccountData } from './wechat/accounts.js';
 
 const MAX_MESSAGE_LENGTH = 2048;
 
@@ -51,62 +52,16 @@ function promptUser(question: string, defaultValue?: string): Promise<string> {
   });
 }
 
-function openFile(filePath: string): void {
-  const platform = process.platform;
-  let cmd: string;
-  let args: string[];
-
-  if (platform === 'darwin') {
-    cmd = 'open';
-    args = [filePath];
-  } else if (platform === 'win32') {
-    cmd = 'cmd';
-    args = ['/c', 'start', '', filePath];
-  } else {
-    cmd = 'xdg-open';
-    args = [filePath];
-  }
-
-  const result = spawnSync(cmd, args, { stdio: 'ignore' });
-  if (result.error) {
-    logger.warn('Failed to open file', { cmd, filePath, error: result.error.message });
-  }
-}
-
 async function runSetup(): Promise<void> {
   mkdirSync(DATA_DIR, { recursive: true });
-  const QR_PATH = join(DATA_DIR, 'qrcode.png');
 
   console.log('正在设置...\n');
 
   while (true) {
     const { qrcodeUrl, qrcodeId } = await startQrLogin();
 
-    const isHeadlessLinux = process.platform === 'linux' &&
-      !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY;
-
-    if (isHeadlessLinux) {
-      try {
-        const qrcodeTerminal = await import('qrcode-terminal');
-        console.log('请用微信扫描下方二维码：\n');
-        qrcodeTerminal.default.generate(qrcodeUrl, { small: true });
-        console.log();
-        console.log('二维码链接：', qrcodeUrl);
-        console.log();
-      } catch {
-        logger.warn('qrcode-terminal not available, falling back to URL');
-        console.log('无法在终端显示二维码，请访问链接：');
-        console.log(qrcodeUrl);
-        console.log();
-      }
-    } else {
-      const QRCode = await import('qrcode');
-      const pngData = await QRCode.toBuffer(qrcodeUrl, { type: 'png', width: 400, margin: 2 });
-      writeFileSync(QR_PATH, pngData);
-      openFile(QR_PATH);
-      console.log('已打开二维码图片，请用微信扫描：');
-      console.log(`图片路径: ${QR_PATH}\n`);
-    }
+    console.log('请用微信扫描下方二维码：\n');
+    await displayQrInTerminal(qrcodeUrl);
 
     console.log('等待扫码绑定...');
 
@@ -123,16 +78,12 @@ async function runSetup(): Promise<void> {
     }
   }
 
-  try { unlinkSync(QR_PATH); } catch {
-    logger.warn('Failed to clean up QR image', { path: QR_PATH });
-  }
-
   const workingDir = await promptUser('请输入工作目录', process.cwd());
   const config = loadConfig();
   config.workingDirectory = workingDir;
   saveConfig(config);
 
-  console.log('\n运行 npm run daemon -- start 启动服务');
+  console.log('\n运行 npm run daemon 启动服务');
 }
 
 async function runDaemon(): Promise<void> {

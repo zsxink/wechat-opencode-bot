@@ -26,6 +26,22 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Display QR code in terminal. */
+export async function displayQrInTerminal(qrcodeUrl: string): Promise<void> {
+  try {
+    const qrcodeTerminal = await import('qrcode-terminal');
+    qrcodeTerminal.default.generate(qrcodeUrl, { small: true });
+    console.log('\n如果二维码未能成功展示，请用浏览器打开以下链接扫码：');
+    console.log(qrcodeUrl);
+    console.log();
+  } catch (err) {
+    logger.warn('qrcode-terminal not available', { error: String(err) });
+    console.log('无法在终端显示二维码，请用浏览器打开以下链接扫码：');
+    console.log(qrcodeUrl);
+    console.log();
+  }
+}
+
 /** Phase 1: Request a QR code for login. Returns the URL and ID. */
 export async function startQrLogin(): Promise<{ qrcodeUrl: string; qrcodeId: string }> {
   logger.info('Requesting QR code');
