@@ -81,6 +81,15 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
       { type: "text", text: prompt },
     ];
 
+    if (images?.length) {
+      for (const img of images) {
+        parts.push({
+          type: "image",
+          source: img.source,
+        });
+      }
+    }
+
     const promptResult = await client.session.prompt({
       path: { id: sessionId },
       body: {
