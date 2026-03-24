@@ -1,4 +1,4 @@
-import { createOpencodeClient } from "@opencode-ai/sdk/v2";
+import { createOpencodeClient } from "@opencode-ai/sdk";
 import { logger } from "../logger.js";
 
 export interface QueryOptions {
@@ -28,7 +28,7 @@ export async function initOpenCode(): Promise<void> {
       baseUrl: OPENCODE_URL,
     });
 
-    // Verify connection using v2 health endpoint
+    // Verify connection using health endpoint
     const health = await client.global.health();
     if (!health.data || health.error) {
       throw new Error("Health check failed");
@@ -68,17 +68,13 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
 
     let sessionId = resume || "";
     if (!sessionId) {
-      const sessionResult = await client.session.create({
+      const session = await client.session.create({
         body: { title: "WeChat Bot Session" },
       });
-      if (sessionResult.error) {
-        throw new Error(String(sessionResult.error));
+      if (!session || !session.id) {
+        throw new Error("Failed to create session");
       }
-      // v2 version returns session directly
-      sessionId = sessionResult.data?.id || sessionResult.data?.info?.id || "";
-      if (!sessionId) {
-        throw new Error("Failed to get session ID from create response");
-      }
+      sessionId = session.id;
     }
 
     const parts: any[] = [
@@ -94,7 +90,7 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
       }
     }
 
-    const promptResult = await client.session.prompt({
+    const result = await client.session.prompt({
       path: { id: sessionId },
       body: {
         parts,
@@ -102,14 +98,10 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
       },
     });
 
-    if (promptResult.error) {
-      throw new Error(String(promptResult.error));
-    }
-
+    // Extract text from response parts
     let text = "";
-    const responseData = promptResult.data;
-    if (responseData && responseData.parts) {
-      text = responseData.parts
+    if (result && result.parts) {
+      text = result.parts
         .filter((p: any) => p.type === "text" && p.text)
         .map((p: any) => p.text)
         .join("\n");
