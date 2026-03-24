@@ -1,4 +1,3 @@
-import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 import { logger } from "../logger.js";
 
 export interface QueryOptions {
@@ -19,24 +18,16 @@ export interface QueryResult {
   error?: string;
 }
 
-let client: any = null;
 const OPENCODE_URL = process.env.OPENCODE_URL || "http://localhost:4096";
 
 export async function initOpenCode(): Promise<void> {
   try {
-    client = createOpencodeClient({
-      baseUrl: OPENCODE_URL,
-    });
-
-    const health = await client.global.health();
-    if (!health.data || health.error) {
-      throw new Error("Health check failed");
-    }
-
-    logger.info("OpenCode client connected", { version: health.data.version });
+    const res = await fetch(`${OPENCODE_URL}/global/health`);
+    if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
+    const data = await res.json() as any;
+    logger.info("OpenCode client connected", { version: data.version });
   } catch (err) {
     logger.error("Failed to connect to OpenCode", { error: String(err) });
-    client = null;
     throw new Error(
       `无法连接到 OpenCode 服务 (${OPENCODE_URL})。请确保：\n` +
       `1. OpenCode 已安装: npm install -g opencode-ai\n` +
@@ -90,10 +81,6 @@ async function sendPrompt(sessionId: string, parts: any[], model?: string): Prom
 }
 
 export async function openCodeQuery(options: QueryOptions): Promise<QueryResult> {
-  if (!client) {
-    await initOpenCode();
-  }
-
   const { prompt, cwd, resume, model, images } = options;
 
   logger.info("Starting OpenCode query", {
@@ -132,6 +119,6 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
   }
 }
 
-export function getOpenCodeClient(): any {
-  return client;
+export function getOpenCodeClient(): null {
+  return null;
 }
