@@ -7,15 +7,13 @@
     "build": "tsc",
     "postinstall": "npm run build",
     "start": "node dist/main.js",
-    "run": "node dist/main.js start",
     "dev": "tsc --watch",
     "test": "node --test dist/tests/*.test.js",
-    "setup": "node dist/main.js setup",
-    "daemon": "node dist/main.js start",
-    "daemon:start": "node dist/main.js start",
-    "daemon:unix": "bash scripts/daemon.sh start",
-    "daemon:win": "scripts\\daemon.bat start",
-    "daemon:win:ps": "powershell -ExecutionPolicy Bypass -File scripts\\daemon.ps1 -Command start"
+    "setup": "node dist/main.js --setup",
+    "daemon": "node dist/main.js",
+    "daemon:start": "node dist/main.js --start",
+    "daemon:stop": "node dist/main.js --stop",
+    "daemon:status": "node dist/main.js --status"
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.0.0",

@@ -358,16 +358,40 @@ async function sendToOpenCode(
 
 const command = process.argv[2];
 
-if (command === 'setup') {
+function showHelp(): void {
+  console.log(`
+wechat-opencode-bot - 微信接入 OpenCode
+
+用法:
+  npm run setup          扫码绑定微信
+  npm run daemon:start   启动服务
+  npm run daemon:stop    停止服务
+  npm run daemon:status  查看状态
+
+或直接:
+  node dist/main.js --setup   扫码绑定微信
+  node dist/main.js --start   启动服务
+  node dist/main.js --stop    停止服务
+  node dist/main.js --status  查看状态
+`);
+}
+
+if (command === '--setup' || command === 'setup') {
   runSetup().catch((err) => {
     logger.error('Setup failed', { error: err instanceof Error ? err.message : String(err) });
     console.error('设置失败:', err);
     process.exit(1);
   });
-} else {
+} else if (command === '--start' || command === 'start' || !command) {
   runDaemon().catch((err) => {
     logger.error('Daemon start failed', { error: err instanceof Error ? err.message : String(err) });
     console.error('启动失败:', err);
     process.exit(1);
   });
+} else if (command === '--help' || command === '-h') {
+  showHelp();
+} else {
+  console.error(`未知命令: ${command}`);
+  showHelp();
+  process.exit(1);
 }

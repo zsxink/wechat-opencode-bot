@@ -9,14 +9,14 @@
 - 通过微信与 OpenCode 进行文字对话
 - 图片识别——发送照片让 OpenCode 分析
 - 权限审批——在微信中回复 `y`/`n` 控制工具执行
-- 斜杠命令——`/help`、`/clear`、`/new`、`/model`、`/status`、`/skills`
-- 跨平台——macOS（launchd）、Linux（systemd + nohup 回退）
+- 斜杠命令——`/help`、`/clear`、`/new`、`/model`、`/models`、`/status`、`/skills`
+- 跨平台——macOS、Linux、Windows
 - 会话持久化——跨消息恢复上下文
 
 ## 前置条件
 
 - Node.js >= 18
-- macOS 或 Linux
+- macOS、Linux 或 Windows
 - 个人微信账号（需扫码绑定）
 - 已安装 [OpenCode](https://opencode.ai)（本地运行，默认 localhost:4096）
 
@@ -39,20 +39,16 @@ npm install
 扫码绑定微信账号：
 
 ```bash
-cd ~/wechat-opencode-bot
 npm run setup
 ```
 
-会弹出二维码图片，用微信扫码后配置工作目录。
+会在终端显示二维码，用微信扫码后配置工作目录。
 
 ### 2. 启动服务
 
 ```bash
-npm run daemon -- start
+npm run daemon:start
 ```
-
-- **macOS**：注册 launchd 代理，实现开机自启和自动重启
-- **Linux**：使用 systemd 用户服务（无 systemd 时回退到 nohup）
 
 ### 3. 在微信中聊天
 
@@ -61,10 +57,9 @@ npm run daemon -- start
 ### 4. 管理服务
 
 ```bash
-npm run daemon -- status   # 查看运行状态
-npm run daemon -- stop     # 停止服务
-npm run daemon -- restart  # 重启服务（代码更新后使用）
-npm run daemon -- logs     # 查看最近日志
+npm run daemon:start    # 启动服务
+npm run daemon:stop     # 停止服务
+npm run daemon:status   # 查看运行状态
 ```
 
 ## 微信端命令
@@ -75,6 +70,7 @@ npm run daemon -- logs     # 查看最近日志
 | `/clear` | 清除当前会话 |
 | `/new` | 新建会话（清空上下文）|
 | `/model <名称>` | 切换 OpenCode 模型 |
+| `/models` | 列出可用的模型 |
 | `/permission <模式>` | 切换权限模式 |
 | `/status` | 查看当前会话状态 |
 | `/skills` | 列出可用的 OpenCode 技能 |
@@ -99,13 +95,12 @@ npm run daemon -- logs     # 查看最近日志
 ## 工作原理
 
 ```
-微信（手机） ←→ ilink bot API ←→ Node.js 守护进程 ←→ OpenCode SDK（本地）
+微信（手机） ←→ ilink bot API ←→ Node.js 守护进程 ←→ OpenCode 服务
 ```
 
 - 守护进程通过长轮询监听微信 ilink bot API 的新消息
-- 消息通过 `@opencode-ai/sdk` 转发给 OpenCode
+- 消息通过 HTTP API 转发给 OpenCode
 - 回复发送回微信
-- 平台原生服务管理保持守护进程运行
 
 ## 数据目录
 

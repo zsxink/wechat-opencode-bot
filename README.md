@@ -9,14 +9,14 @@ A bridge service that connects WeChat to OpenCode. Chat with OpenCode from your 
 - Text conversation with OpenCode via WeChat
 - Image recognition — send photos for OpenCode to analyze
 - Permission approval — reply `y`/`n` in WeChat to control tool execution
-- Slash commands — `/help`, `/clear`, `/new`, `/model`, `/status`, `/skills`
-- Cross-platform — macOS (launchd), Linux (systemd + nohup fallback)
+- Slash commands — `/help`, `/clear`, `/new`, `/model`, `/models`, `/status`, `/skills`
+- Cross-platform — macOS, Linux, Windows
 - Session persistence — resume context across messages
 
 ## Prerequisites
 
 - Node.js >= 18
-- macOS or Linux
+- macOS, Linux or Windows
 - Personal WeChat account (requires QR code binding)
 - [OpenCode](https://opencode.ai) installed and running locally (default localhost:4096)
 
@@ -39,20 +39,16 @@ The `postinstall` script will automatically compile TypeScript.
 Bind your WeChat account via QR code:
 
 ```bash
-cd ~/wechat-opencode-bot
 npm run setup
 ```
 
-A QR code image will open — scan it with WeChat, then configure your working directory.
+A QR code will display in terminal — scan it with WeChat, then configure your working directory.
 
 ### 2. Start the Service
 
 ```bash
-npm run daemon -- start
+npm run daemon:start
 ```
-
-- **macOS**: Registers a launchd agent for auto-start and auto-restart
-- **Linux**: Uses systemd user service (falls back to nohup if systemd unavailable)
 
 ### 3. Chat in WeChat
 
@@ -61,10 +57,9 @@ Simply send messages in WeChat to chat with OpenCode.
 ### 4. Manage the Service
 
 ```bash
-npm run daemon -- status   # Check running status
-npm run daemon -- stop     # Stop the service
-npm run daemon -- restart  # Restart (use after code updates)
-npm run daemon -- logs     # View recent logs
+npm run daemon:start    # Start the service
+npm run daemon:stop     # Stop the service
+npm run daemon:status   # Check running status
 ```
 
 ## WeChat Commands
@@ -75,6 +70,7 @@ npm run daemon -- logs     # View recent logs
 | `/clear` | Clear current session |
 | `/new` | Create new session (clear context) |
 | `/model <name>` | Switch OpenCode model |
+| `/models` | List available models |
 | `/permission <mode>` | Switch permission mode |
 | `/status` | Show current session status |
 | `/skills` | List available OpenCode skills |
@@ -99,13 +95,12 @@ Switch permission mode with `/permission <mode>`:
 ## How It Works
 
 ```
-WeChat (phone) ←→ ilink bot API ←→ Node.js daemon ←→ OpenCode SDK (local)
+WeChat (phone) ←→ ilink bot API ←→ Node.js daemon ←→ OpenCode service
 ```
 
 - Daemon listens for new messages via long-polling WeChat ilink bot API
-- Messages forwarded to OpenCode via `@opencode-ai/sdk`
+- Messages forwarded to OpenCode via HTTP API
 - Replies sent back to WeChat
-- Platform-native service management keeps daemon running
 
 ## Data Directory
 
