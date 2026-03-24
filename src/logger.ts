@@ -2,14 +2,14 @@ import { mkdirSync, appendFileSync, readdirSync, unlinkSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 
-const LOG_DIR = join(homedir(), ".wechat-claude-code", "logs");
+const LOG_DIR = join(homedir(), ".wechat-opencode-bot", "logs");
 const MAX_LOG_FILES = 30; // Keep at most 30 days of logs
 
 /** Clean up old log files beyond MAX_LOG_FILES retention. */
 function cleanupOldLogs(): void {
   try {
     const files = readdirSync(LOG_DIR)
-      .filter((f) => f.startsWith("bridge-") && f.endsWith(".log"))
+      .filter((f) => f.startsWith("bot-") && f.endsWith(".log"))
       .sort();
     while (files.length > MAX_LOG_FILES) {
       unlinkSync(join(LOG_DIR, files.shift()!));

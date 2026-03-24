@@ -15,7 +15,7 @@ export interface AccountData {
   createdAt: string;
 }
 
-const ACCOUNTS_DIR = join(homedir(), '.wechat-claude-code', 'accounts');
+const ACCOUNTS_DIR = join(homedir(), '.wechat-opencode-bot', 'accounts');
 
 /** Reject accountIds containing path traversal or unexpected characters. */
 function validateAccountId(accountId: string): void {

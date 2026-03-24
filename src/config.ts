@@ -8,7 +8,7 @@ export interface Config {
   permissionMode?: "default" | "acceptEdits" | "plan" | "auto";
 }
 
-const CONFIG_DIR = join(homedir(), ".wechat-claude-code");
+const CONFIG_DIR = join(homedir(), ".wechat-opencode-bot");
 const CONFIG_PATH = join(CONFIG_DIR, "config.env");
 
 const DEFAULT_CONFIG: Config = {

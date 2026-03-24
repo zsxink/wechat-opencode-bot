@@ -2,10 +2,10 @@ import { createInterface } from 'node:readline';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
-import { unlinkSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { unlinkSync, writeFileSync, mkdirSync } from 'node:fs';
 
 import { WeChatApi } from './wechat/api.js';
-import { saveAccount, loadLatestAccount, type AccountData } from './wechat/accounts.js';
+import { loadLatestAccount, type AccountData } from './wechat/accounts.js';
 import { startQrLogin, waitForQrScan } from './wechat/login.js';
 import { createMonitor, type MonitorCallbacks } from './wechat/monitor.js';
 import { createSender } from './wechat/send.js';
