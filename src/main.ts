@@ -149,8 +149,8 @@ async function runDaemon(): Promise<void> {
     await initOpenCode();
     console.log('✅ OpenCode 服务已连接');
   } catch (err) {
-    console.error('⚠️ OpenCode 服务连接失败，请确保 opencode 已安装并运行');
-    console.error('错误:', err);
+    console.error('\n' + (err instanceof Error ? err.message : String(err)));
+    process.exit(1);
   }
 
   const api = new WeChatApi(account.botToken, account.baseUrl);

@@ -1,4 +1,4 @@
-import { createOpencode, createOpencodeClient } from "@opencode-ai/sdk";
+import { createOpencodeClient } from "@opencode-ai/sdk";
 import { logger } from "../logger.js";
 
 export interface QueryOptions {
@@ -20,31 +20,31 @@ export interface QueryResult {
 }
 
 let client: any = null;
-let serverProcess: { close: () => void } | null = null;
+const OPENCODE_URL = process.env.OPENCODE_URL || "http://localhost:4096";
 
 export async function initOpenCode(): Promise<void> {
   try {
-    const opencode = await createOpencode({
-      hostname: "127.0.0.1",
-      port: 4096,
-      timeout: 10000,
-    });
-    client = opencode.client;
-    serverProcess = opencode.server;
-    logger.info("OpenCode client initialized");
-  } catch (err) {
-    logger.error("Failed to initialize OpenCode client", { error: String(err) });
-    throw err;
-  }
-}
-
-export async function createOpenCodeClientOnly(): Promise<any> {
-  if (!client) {
     client = createOpencodeClient({
-      baseUrl: "http://localhost:4096",
+      baseUrl: OPENCODE_URL,
     });
+
+    // Verify connection
+    const health = await client.global.health();
+    if (!health.data || health.error) {
+      throw new Error("Health check failed");
+    }
+
+    logger.info("OpenCode client connected", { version: health.data.version });
+  } catch (err) {
+    logger.error("Failed to connect to OpenCode", { error: String(err) });
+    client = null;
+    throw new Error(
+      `无法连接到 OpenCode 服务 (${OPENCODE_URL})。请确保：\n` +
+      `1. OpenCode 已安装: npm install -g opencode-ai\n` +
+      `2. OpenCode 服务已启动: opencode serve --hostname 127.0.0.1 --port 4096\n` +
+      `3. 或者通过环境变量 OPENCODE_URL 指定服务地址`
+    );
   }
-  return client;
 }
 
 export async function openCodeQuery(options: QueryOptions): Promise<QueryResult> {
@@ -63,13 +63,13 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
 
   try {
     if (!client) {
-      client = await createOpenCodeClientOnly();
+      await initOpenCode();
     }
 
     let sessionId = resume || "";
     if (!sessionId) {
       const sessionResult = await client.session.create({
-        body: { title: "WeChat Bridge Session" },
+        body: { title: "WeChat Bot Session" },
       });
       if (sessionResult.error) {
         throw new Error(String(sessionResult.error));
