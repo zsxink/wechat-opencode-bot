@@ -127,10 +127,13 @@ export async function initOpenCode(cwd?: string): Promise<void> {
 async function createSession(title: string, cwd?: string): Promise<string> {
   logger.info("Creating OpenCode session", { title, cwd });
   const body: any = { title };
+  
+  let url = `${OPENCODE_URL}/session`;
   if (cwd) {
-    body.cwd = cwd;
+    url += `?directory=${encodeURIComponent(cwd)}`;
   }
-  const res = await fetch(`${OPENCODE_URL}/session`, {
+  
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -142,8 +145,32 @@ async function createSession(title: string, cwd?: string): Promise<string> {
     throw new Error(`Failed to create session: ${res.status} - ${text}`);
   }
   const data = await res.json() as any;
-  logger.info("Session created", { id: data.id });
+  logger.info("Session created", { id: data.id, directory: data.directory });
   return data.id;
+}
+
+async function listSessions(cwd?: string): Promise<Array<{id: string, title: string, directory: string, time: {created: number, updated: number}}>> {
+  logger.info("Listing OpenCode sessions", { cwd });
+  
+  let url = `${OPENCODE_URL}/session`;
+  if (cwd) {
+    url += `?directory=${encodeURIComponent(cwd)}`;
+  }
+  
+  const res = await fetch(url, {
+    method: "GET",
+    headers: { "Accept": "application/json" },
+  });
+  
+  if (!res.ok) {
+    const text = await res.text();
+    logger.error("Session list failed", { status: res.status, body: text });
+    throw new Error(`Failed to list sessions: ${res.status} - ${text}`);
+  }
+  
+  const sessions = await res.json() as any;
+  logger.info("Sessions listed", { count: sessions.length });
+  return sessions;
 }
 
 async function getModelConfig(modelName: string): Promise<{ providerID: string, modelID: string } | null> {
@@ -295,3 +322,5 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
 export function getOpenCodeClient(): null {
   return null;
 }
+
+export { listSessions, createSession };

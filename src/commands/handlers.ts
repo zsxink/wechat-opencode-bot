@@ -1,35 +1,36 @@
 import type { CommandContext, CommandResult } from './router.js';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+import { join, resolve, isAbsolute, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getWechatSessionList } from '../session.js';
+import { listSessions, createSession } from '../opencode/provider.js';
+import { loadConfig } from '../config.js';
 
 const HELP_TEXT = `可用命令：
 
 会话管理：
   /help             显示帮助
   /clear            清除当前会话
-  /new              新建会话（清空上下文）
+  /new [标题]       新建会话（清空上下文），可选标题
   /reset            完全重置（包括工作目录等设置）
   /status           查看当前会话状态
   /compact          压缩上下文（开始新 SDK 会话，保留历史）
   /history [数量]   查看对话记录（默认最近20条）
   /undo [数量]      撤销最近对话（默认1条）
-  /sessions         查看微信会话列表
+  /sessions         查看当前目录的 OpenCode 会话列表
   /session <ID>     切换到指定会话
 
-配置：
-  /cwd [路径]       查看或切换工作目录
-  /model [名称]     查看或切换 OpenCode 模型
-  /models           列出可用的模型
-  /permission [模式] 查看或切换权限模式
+工作目录：
+  /cwd [路径]       切换工作目录（支持相对路径、绝对路径）
+  /ls               显示当前目录内容
+
+权限：
+  /permission [模式] 查看或设置权限模式
 
 其他：
-  /skills           列出可用的 OpenCode 技能
-  /version          查看版本信息
-  /<skill> [参数]   触发已安装的技能
-
-直接输入文字即可与 OpenCode 对话`;
+  /model [模型ID]   查看或切换模型
+  /models           查看可用模型
+  /skills           查看已安装的技能
+  /version          查看版本`;
 
 export function handleHelp(_args: string): CommandResult {
   return { reply: HELP_TEXT, handled: true };
@@ -42,29 +43,96 @@ export function handleClear(ctx: CommandContext): CommandResult {
   return { reply: '✅ 会话已清除，下次消息将开始新会话。', handled: true };
 }
 
-export function handleNew(ctx: CommandContext): CommandResult {
+export async function handleNew(ctx: CommandContext): Promise<CommandResult> {
   ctx.rejectPendingPermission?.();
-  
-  // 清除当前工作目录的会话 ID
+
   const cwd = ctx.session.workingDirectory;
-  if (ctx.session.sessionsByCwd && cwd) {
-    delete ctx.session.sessionsByCwd[cwd];
+  const title = `Wechat-${Date.now()}`;
+
+  try {
+    const newSessionId = await createSession(title, cwd);
+
+    ctx.updateSession({
+      sdkSessionId: newSessionId,
+      chatHistory: [],
+    });
+
+    return { reply: `🆕 已创建新会话\n标题: ${title}\n会话ID: ${newSessionId}\n目录: ${cwd}`, handled: true };
+  } catch (err) {
+    return { reply: `⚠️ 创建新会话失败: ${String(err)}`, handled: true };
   }
-  
-  ctx.updateSession({
-    sdkSessionId: undefined,
-    sessionsByCwd: ctx.session.sessionsByCwd,
-    chatHistory: [],
-  });
-  return { reply: '🆕 已创建新会话，上下文已清空。', handled: true };
+}
+
+function isPathInside(parent: string, child: string): boolean {
+  const normalizedParent = parent.replace(/\\/g, '/').replace(/\/$/, '');
+  const normalizedChild = child.replace(/\\/g, '/').replace(/\/$/, '');
+  return normalizedChild.startsWith(normalizedParent + '/') || normalizedChild === normalizedParent;
+}
+
+function normalizePath(p: string): string {
+  return p.replace(/\\/g, '/');
 }
 
 export function handleCwd(ctx: CommandContext, args: string): CommandResult {
   if (!args) {
     return { reply: `当前工作目录: ${ctx.session.workingDirectory}\n用法: /cwd <路径>`, handled: true };
   }
-  ctx.updateSession({ workingDirectory: args });
-  return { reply: `✅ 工作目录已切换为: ${args}`, handled: true };
+
+  const config = loadConfig();
+  const baseDir = normalizePath(config.workingDirectory);
+  const currentDir = normalizePath(ctx.session.workingDirectory);
+
+  let targetPath: string;
+  if (isAbsolute(args)) {
+    targetPath = normalizePath(args);
+  } else {
+    targetPath = normalizePath(resolve(currentDir, args));
+  }
+
+  if (!existsSync(targetPath)) {
+    try {
+      mkdirSync(targetPath, { recursive: true });
+    } catch (err) {
+      return { reply: `⚠️ 无法创建目录: ${targetPath}\n错误: ${String(err)}`, handled: true };
+    }
+  }
+
+  const targetNormalized = normalizePath(targetPath);
+  const isInsideBase = isPathInside(baseDir, targetNormalized);
+
+  if (!isInsideBase) {
+    return {
+      reply: `⚠️ 目标目录超出允许范围\n允许范围: ${baseDir}\n目标目录: ${targetPath}`,
+      handled: true
+    };
+  }
+
+  ctx.updateSession({ workingDirectory: targetPath });
+  return { reply: `✅ 工作目录已切换为: ${targetPath}`, handled: true };
+}
+
+export function handleLs(ctx: CommandContext): CommandResult {
+  const currentDir = ctx.session.workingDirectory;
+
+  try {
+    const items = readdirSync(currentDir);
+
+    if (items.length === 0) {
+      return { reply: `${currentDir}\n(空目录)`, handled: true };
+    }
+
+    const lines: string[] = [];
+    for (const item of items) {
+      const fullPath = join(currentDir, item);
+      const isDir = statSync(fullPath).isDirectory();
+      const icon = isDir ? '📁' : '📄';
+      lines.push(`${icon} ${item}`);
+    }
+
+    return { reply: `${currentDir}\n${lines.join('\n')}`, handled: true };
+  } catch (err) {
+    return { reply: `⚠️ 无法读取目录: ${String(err)}`, handled: true };
+  }
 }
 
 export function handleModel(ctx: CommandContext, args: string): CommandResult {
@@ -171,7 +239,6 @@ export function handleCompact(ctx: CommandContext): CommandResult {
     return { reply: 'ℹ️ 当前没有活动的 SDK 会话，无需压缩。', handled: true };
   }
   ctx.updateSession({
-    previousSdkSessionId: currentSessionId,
     sdkSessionId: undefined,
   });
   return {
@@ -254,58 +321,47 @@ export function handleVersion(): CommandResult {
   }
 }
 
-export function handleSessions(ctx: CommandContext): CommandResult {
-  const sessions = getWechatSessionList(ctx.session);
+export async function handleSessions(ctx: CommandContext): Promise<CommandResult> {
+  const cwd = ctx.session.workingDirectory;
   
-  if (sessions.length === 0) {
-    return { reply: '暂无微信会话记录', handled: true };
+  try {
+    const sessions = await listSessions(cwd);
+    
+    if (sessions.length === 0) {
+      return { reply: `暂无会话记录\n当前目录: ${cwd}`, handled: true };
+    }
+
+    const lines = sessions.map((s, i) => {
+      const created = new Date(s.time.created).toLocaleString('zh-CN');
+      return `${i + 1}. ${s.title}\n   ID: ${s.id}\n   创建时间: ${created}`;
+    });
+
+    return { 
+      reply: `📋 会话列表（目录: ${cwd}）：\n\n${lines.join('\n\n')}\n\n使用 /session <ID> 切换会话`, 
+      handled: true 
+    };
+  } catch (err) {
+    return { reply: `⚠️ 获取会话列表失败: ${String(err)}`, handled: true };
   }
-
-  const lines = sessions.map((s, i) => 
-    `${i + 1}. ${s.title}\n   ID: ${s.id}\n   目录: ${s.cwd}`
-  );
-
-  return { 
-    reply: `📋 微信会话列表：\n\n${lines.join('\n\n')}\n\n使用 /session <ID> 切换会话`, 
-    handled: true 
-  };
 }
 
 export function handleSession(ctx: CommandContext, args: string): CommandResult {
   if (!args) {
     const currentCwd = ctx.session.workingDirectory;
-    const currentSessionId = ctx.session.sessionsByCwd?.[currentCwd];
-    const currentTitle = currentSessionId ? ctx.session.sessionTitles?.[currentSessionId] : '无';
+    const currentSessionId = ctx.session.sdkSessionId;
     
     return { 
-      reply: `当前会话：${currentTitle || '无'}\nID: ${currentSessionId || '无'}\n\n用法: /session <会话ID>`, 
+      reply: `当前目录: ${currentCwd}\n当前会话ID: ${currentSessionId || '无'}\n\n用法: /session <会话ID>`, 
       handled: true 
     };
   }
 
   const targetSessionId = args.trim();
   
-  if (!ctx.session.wechatSessions?.includes(targetSessionId)) {
-    return { reply: '⚠️ 未找到该会话，只能切换微信创建的会话', handled: true };
-  }
-
-  let targetCwd: string | undefined;
-  for (const [cwd, sessionId] of Object.entries(ctx.session.sessionsByCwd || {})) {
-    if (sessionId === targetSessionId) {
-      targetCwd = cwd;
-      break;
-    }
-  }
-
-  if (!targetCwd) {
-    return { reply: '⚠️ 未找到该会话对应的工作目录', handled: true };
-  }
-
-  ctx.updateSession({ workingDirectory: targetCwd });
+  ctx.updateSession({ sdkSessionId: targetSessionId });
   
-  const title = ctx.session.sessionTitles?.[targetSessionId] || '未命名会话';
   return { 
-    reply: `✅ 已切换到会话：${title}\n工作目录: ${targetCwd}`, 
+    reply: `✅ 已切换到会话ID: ${targetSessionId}`, 
     handled: true 
   };
 }

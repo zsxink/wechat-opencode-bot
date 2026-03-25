@@ -9,9 +9,10 @@
 - 通过微信与 OpenCode 进行文字对话
 - 图片识别——发送照片让 OpenCode 分析
 - 权限审批——在微信中回复 `y`/`n` 控制工具执行
-- 斜杠命令——`/help`、`/clear`、`/new`、`/model`、`/models`、`/status`、`/skills`
+- 斜杠命令——`/help`、`/cwd`、`/ls`、`/new`、`/sessions`、`/model`、`/models`、`/status`、`/skills`
 - 跨平台——macOS、Linux、Windows
 - 会话持久化——跨消息恢复上下文
+- 基于目录的会话管理——每个目录有独立的 OpenCode 会话
 
 ## 前置条件
 
@@ -57,23 +58,64 @@ npm run daemon:start
 ### 4. 管理服务
 
 ```bash
-npm run daemon:start    # 启动服务
+npm run daemon:start    # 启动服务（后台运行）
 npm run daemon:stop     # 停止服务
 npm run daemon:status   # 查看运行状态
 ```
 
 ## 微信端命令
 
+### 会话管理
+
 | 命令 | 说明 |
 |------|------|
 | `/help` | 显示帮助 |
 | `/clear` | 清除当前会话 |
-| `/new` | 新建会话（清空上下文）|
-| `/model <名称>` | 切换 OpenCode 模型 |
-| `/models` | 列出可用的模型 |
-| `/permission <模式>` | 切换权限模式 |
+| `/new [标题]` | 新建会话（清空上下文），可选标题 |
+| `/sessions` | 查看当前目录的 OpenCode 会话列表 |
+| `/session <ID>` | 切换到指定会话 |
+| `/compact` | 压缩上下文（开始新 SDK 会话，保留历史）|
+| `/history [数量]` | 查看对话记录（默认最近20条）|
+| `/undo [数量]` | 撤销最近对话（默认1条）|
+
+### 工作目录
+
+| 命令 | 说明 |
+|------|------|
+| `/cwd [路径]` | 切换工作目录（支持相对路径、绝对路径）|
+| `/ls` | 显示当前目录内容 |
+
+### 配置
+
+| 命令 | 说明 |
+|------|------|
+| `/model [模型ID]` | 查看或切换模型 |
+| `/models` | 查看可用模型 |
+| `/permission [模式]` | 查看或切换权限模式 |
 | `/status` | 查看当前会话状态 |
+
+### 其他
+
+| 命令 | 说明 |
+|------|------|
 | `/skills` | 列出可用的 OpenCode 技能 |
+| `/version` | 查看版本信息 |
+
+## 工作目录说明
+
+- 初始工作目录由 `config.env` 中的 `workingDirectory` 指定
+- `/cwd` 支持相对路径（如 `a`、`../b`）和绝对路径
+- `/cwd` 会自动创建不存在的目录
+- 目录切换范围限制在 `config.env` 工作目录以内
+- 每个目录有独立的 OpenCode 会话
+
+示例：
+
+```
+/cwd a              # 切换到当前目录下的 a 子目录
+/cwd ../b           # 切换到上级目录的 b 目录
+/cwd /home/user     # 切换到绝对路径（需在基础目录范围内）
+```
 
 ## 权限审批
 
@@ -112,7 +154,8 @@ npm run daemon:status   # 查看运行状态
 ├── config.env      # 全局配置（工作目录、模型、权限模式）
 ├── sessions/       # 会话数据（每个账号一个 JSON）
 ├── get_updates_buf # 消息轮询同步缓冲
-└── logs/           # 运行日志（每日轮转）
+├── logs/           # 运行日志（每日轮转）
+└── daemon.pid       # 守护进程 PID
 ```
 
 ## 开发

@@ -344,7 +344,7 @@ async function sendToOpenCode(
 
   try {
     const cwd = session.workingDirectory || config.workingDirectory;
-    let sessionId = session.sessionsByCwd[cwd];
+    let sessionId = session.sdkSessionId;
 
     let sessionTitle: string | undefined;
     if (!sessionId) {
@@ -416,13 +416,7 @@ async function sendToOpenCode(
     }
 
     if (result.sessionId) {
-      session.sessionsByCwd[cwd] = result.sessionId;
-      if (!session.wechatSessions.includes(result.sessionId)) {
-        session.wechatSessions.push(result.sessionId);
-      }
-      if (sessionTitle) {
-        session.sessionTitles[result.sessionId] = sessionTitle;
-      }
+      session.sdkSessionId = result.sessionId;
     }
 
     session.state = 'idle';

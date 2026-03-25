@@ -9,9 +9,10 @@ A bridge service that connects WeChat to OpenCode. Chat with OpenCode from your 
 - Text conversation with OpenCode via WeChat
 - Image recognition — send photos for OpenCode to analyze
 - Permission approval — reply `y`/`n` in WeChat to control tool execution
-- Slash commands — `/help`, `/clear`, `/new`, `/model`, `/models`, `/status`, `/skills`
+- Slash commands — `/help`, `/cwd`, `/ls`, `/new`, `/sessions`, `/model`, `/models`, `/status`, `/skills`
 - Cross-platform — macOS, Linux, Windows
 - Session persistence — resume context across messages
+- Directory-based session management — each directory has its own OpenCode session
 
 ## Prerequisites
 
@@ -57,23 +58,64 @@ Simply send messages in WeChat to chat with OpenCode.
 ### 4. Manage the Service
 
 ```bash
-npm run daemon:start    # Start the service
+npm run daemon:start    # Start the service (runs in background)
 npm run daemon:stop     # Stop the service
 npm run daemon:status   # Check running status
 ```
 
 ## WeChat Commands
 
+### Session Management
+
 | Command | Description |
 |---------|-------------|
 | `/help` | Show help |
 | `/clear` | Clear current session |
-| `/new` | Create new session (clear context) |
-| `/model <name>` | Switch OpenCode model |
+| `/new [title]` | Create new session (clear context), optional title |
+| `/sessions` | List OpenCode sessions in current directory |
+| `/session <ID>` | Switch to specified session |
+| `/compact` | Compact context (start new SDK session, keep history) |
+| `/history [n]` | View chat history (default last 20) |
+| `/undo [n]` | Undo last n messages (default 1) |
+
+### Working Directory
+
+| Command | Description |
+|---------|-------------|
+| `/cwd [path]` | Switch working directory (supports relative/absolute paths) |
+| `/ls` | List current directory contents |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `/model [id]` | View or switch model |
 | `/models` | List available models |
-| `/permission <mode>` | Switch permission mode |
+| `/permission [mode]` | View or switch permission mode |
 | `/status` | Show current session status |
+
+### Other
+
+| Command | Description |
+|---------|-------------|
 | `/skills` | List available OpenCode skills |
+| `/version` | Show version info |
+
+## Working Directory
+
+- Initial directory is set by `workingDirectory` in `config.env`
+- `/cwd` supports relative paths (`a`, `../b`) and absolute paths
+- `/cwd` auto-creates directories that don't exist
+- Directory switching is limited to within `config.env` working directory
+- Each directory has its own OpenCode session
+
+Examples:
+
+```
+/cwd a              # Switch to subdirectory a
+/cwd ../b           # Switch to sibling directory b
+/cwd /home/user     # Switch to absolute path (must be within base directory)
+```
 
 ## Permission Approval
 
@@ -112,7 +154,8 @@ All data stored in `~/.wechat-opencode-bot/`:
 ├── config.env      # Global config (working directory, model, permission mode)
 ├── sessions/       # Session data (one JSON per account)
 ├── get_updates_buf # Message polling sync buffer
-└── logs/           # Runtime logs (daily rotation)
+├── logs/           # Runtime logs (daily rotation)
+└── daemon.pid      # Daemon process PID
 ```
 
 ## Development

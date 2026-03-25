@@ -21,25 +21,13 @@ export interface ChatMessage {
 }
 
 export interface Session {
-  // 新的：按工作目录存储会话
-  sessionsByCwd: Record<string, string>;  // { "/path/to/project": "session-id-123" }
-  
-  // 微信创建的会话 ID 列表
-  wechatSessions: string[];
-  
-  // 会话标题映射（用于显示）
-  sessionTitles: Record<string, string>;  // { "session-id-123": "微信: 你好世界..." }
-  
+  sdkSessionId?: string;
   workingDirectory: string;
   model?: string;
   permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'auto';
   state: SessionState;
   chatHistory: ChatMessage[];
   maxHistoryLength?: number;
-  
-  // 废弃字段（用于数据迁移）
-  sdkSessionId?: string;
-  previousSdkSessionId?: string;
 }
 
 export interface PendingPermission {
@@ -60,37 +48,12 @@ export function createSessionStore() {
   function load(accountId: string): Session {
     validateAccountId(accountId);
     const session = loadJson<Session>(getSessionPath(accountId), {
-      sessionsByCwd: {},
-      wechatSessions: [],
-      sessionTitles: {},
       workingDirectory: process.cwd(),
       state: 'idle',
       chatHistory: [],
       maxHistoryLength: DEFAULT_MAX_HISTORY,
     });
 
-    // 向后兼容：确保新字段存在
-    if (!session.sessionsByCwd) {
-      session.sessionsByCwd = {};
-    }
-    if (!session.wechatSessions) {
-      session.wechatSessions = [];
-    }
-    if (!session.sessionTitles) {
-      session.sessionTitles = {};
-    }
-
-    // 数据迁移：从旧的 sdkSessionId 迁移到 sessionsByCwd
-    if (session.sdkSessionId && Object.keys(session.sessionsByCwd).length === 0) {
-      const cwd = session.workingDirectory || process.cwd();
-      session.sessionsByCwd[cwd] = session.sdkSessionId;
-      session.wechatSessions.push(session.sdkSessionId);
-      session.sessionTitles[session.sdkSessionId] = '迁移的会话';
-      delete session.sdkSessionId;
-      logger.info('Migrated sdkSessionId to sessionsByCwd', { cwd, sessionId: session.sessionsByCwd[cwd] });
-    }
-
-    // 向后兼容：确保 chatHistory 存在
     if (!session.chatHistory) {
       session.chatHistory = [];
     }
@@ -104,7 +67,6 @@ export function createSessionStore() {
   function save(accountId: string, session: Session): void {
     mkdirSync(SESSIONS_DIR, { recursive: true });
 
-    // Trim chat history if it exceeds max length before saving
     const maxLen = session.maxHistoryLength || DEFAULT_MAX_HISTORY;
     if (session.chatHistory.length > maxLen) {
       session.chatHistory = session.chatHistory.slice(-maxLen);
@@ -115,9 +77,7 @@ export function createSessionStore() {
 
   function clear(accountId: string, currentSession?: Session): Session {
     const session: Session = {
-      sessionsByCwd: {},
-      wechatSessions: [],
-      sessionTitles: {},
+      sdkSessionId: currentSession?.sdkSessionId,
       workingDirectory: currentSession?.workingDirectory ?? process.cwd(),
       model: currentSession?.model,
       permissionMode: currentSession?.permissionMode,
@@ -139,7 +99,6 @@ export function createSessionStore() {
       timestamp: Date.now(),
     });
 
-    // Trim if exceeds max length
     const maxLen = session.maxHistoryLength || DEFAULT_MAX_HISTORY;
     if (session.chatHistory.length > maxLen) {
       session.chatHistory = session.chatHistory.slice(-maxLen);
@@ -167,41 +126,4 @@ export function createSessionStore() {
   }
 
   return { load, save, clear, addChatMessage, getChatHistoryText };
-}
-
-// Standalone helper functions for session management by cwd
-export function getSessionForCwd(session: Session, cwd: string): string | undefined {
-  return session.sessionsByCwd[cwd];
-}
-
-export function setSessionForCwd(session: Session, cwd: string, sessionId: string, title?: string): void {
-  session.sessionsByCwd[cwd] = sessionId;
-  if (!session.wechatSessions.includes(sessionId)) {
-    session.wechatSessions.push(sessionId);
-  }
-  if (title) {
-    session.sessionTitles[sessionId] = title;
-  }
-}
-
-export function removeSessionForCwd(session: Session, cwd: string): void {
-  const sessionId = session.sessionsByCwd[cwd];
-  if (sessionId) {
-    delete session.sessionsByCwd[cwd];
-    // 注意：不从 wechatSessions 中删除，保留历史记录
-  }
-}
-
-export function getWechatSessionList(session: Session): Array<{id: string, title: string, cwd: string}> {
-  const result: Array<{id: string, title: string, cwd: string}> = [];
-  for (const [cwd, sessionId] of Object.entries(session.sessionsByCwd)) {
-    if (session.wechatSessions.includes(sessionId)) {
-      result.push({
-        id: sessionId,
-        title: session.sessionTitles[sessionId] || '未命名会话',
-        cwd
-      });
-    }
-  }
-  return result;
 }
