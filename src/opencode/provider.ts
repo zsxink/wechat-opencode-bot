@@ -1,5 +1,5 @@
 import { logger } from "../logger.js";
-import { execSync, spawn } from "node:child_process";
+import { execSync, execFile } from "node:child_process";
 import { join } from "node:path";
 
 export interface QueryOptions {
@@ -23,24 +23,6 @@ export interface QueryResult {
 
 const OPENCODE_URL = process.env.OPENCODE_URL || "http://localhost:4096";
 const OPENCODE_PORT = 4096;
-
-function getOpenCodePath(): string {
-  // 尝试获取 opencode 的完整路径
-  try {
-    if (process.platform === "win32") {
-      const result = execSync("where opencode.cmd", { encoding: "utf-8" });
-      return result.trim().split('\n')[0].replace(/\r/g, '');
-    } else {
-      const result = execSync("which opencode", { encoding: "utf-8" });
-      return result.trim();
-    }
-  } catch {
-    // 如果 where 失败，尝试使用 npm 全局路径
-    const npmRoot = execSync("npm root -g", { encoding: "utf-8" }).trim().replace(/\r/g, '');
-    const binPath = join(npmRoot, '..', 'opencode.cmd');
-    return binPath;
-  }
-}
 
 function checkOpenCodeInstalled(): boolean {
   try {
@@ -68,18 +50,17 @@ function startOpenCodeService(cwd?: string): void {
   console.log(`正在启动 OpenCode 服务 (端口: ${OPENCODE_PORT})...`);
   
   const workDir = cwd || process.cwd();
-  const opencodePath = getOpenCodePath();
-  
-  logger.info("OpenCode path", { opencodePath });
   
   if (process.platform === "win32") {
-    // Windows: 使用 spawn 不带 shell
-    const child = spawn(opencodePath, ['serve', '--hostname', '127.0.0.1', '--port', String(OPENCODE_PORT)], {
+    // Windows: 使用 execFile 后台启动
+    execFile('cmd', ['/c', 'start', '/b', 'opencode', 'serve', '--hostname', '127.0.0.1', '--port', String(OPENCODE_PORT)], {
       cwd: workDir,
-      detached: true,
-      stdio: 'ignore',
+      windowsHide: true,
+    }, (error) => {
+      if (error) {
+        logger.error("Failed to start OpenCode", { error: error.message });
+      }
     });
-    child.unref();
   } else {
     execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
       stdio: "ignore",
