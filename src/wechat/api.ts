@@ -111,4 +111,29 @@ export class WeChatApi {
       { file_type: fileType, file_size: fileSize, file_name: fileName },
     );
   }
+
+  /** Get bot config for a user (includes typing_ticket). */
+  async getConfig(ilinkUserId: string, contextToken?: string): Promise<{ typing_ticket?: string }> {
+    return this.request<{ typing_ticket?: string }>(
+      'ilink/bot/getconfig',
+      {
+        ilink_user_id: ilinkUserId,
+        context_token: contextToken,
+      },
+      10_000,
+    );
+  }
+
+  /** Send typing indicator to a user. status: 1=typing, 2=cancel */
+  async sendTyping(toUserId: string, typingTicket: string, status: number): Promise<void> {
+    await this.request(
+      'ilink/bot/sendtyping',
+      {
+        ilink_user_id: toUserId,
+        typing_ticket: typingTicket,
+        status,
+      },
+      5_000,
+    );
+  }
 }

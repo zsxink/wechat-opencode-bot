@@ -128,7 +128,7 @@ async function runDaemon(): Promise<void> {
 
   const callbacks: MonitorCallbacks = {
     onMessage: async (msg: WeixinMessage) => {
-      await handleMessage(msg, account, session, sessionStore, permissionBroker, sender, config, sharedCtx);
+      await handleMessage(msg, account, session, sessionStore, permissionBroker, sender, config, sharedCtx, api);
     },
     onSessionExpired: () => {
       logger.warn('Session expired, will keep retrying...');
@@ -162,6 +162,7 @@ async function handleMessage(
   sender: ReturnType<typeof createSender>,
   config: ReturnType<typeof loadConfig>,
   sharedCtx: { lastContextToken: string },
+  api: WeChatApi,
 ): Promise<void> {
   if (msg.message_type !== MessageType.USER) return;
   if (!msg.from_user_id || !msg.item_list) return;
@@ -257,6 +258,7 @@ async function handleMessage(
         permissionBroker,
         sender,
         config,
+        api,
       );
       return;
     }
@@ -282,6 +284,7 @@ async function handleMessage(
     permissionBroker,
     sender,
     config,
+    api,
   );
 }
 
@@ -300,6 +303,7 @@ async function sendToOpenCode(
   permissionBroker: ReturnType<typeof createPermissionBroker>,
   sender: ReturnType<typeof createSender>,
   config: ReturnType<typeof loadConfig>,
+  api: WeChatApi,
 ): Promise<void> {
   session.state = 'processing';
   sessionStore.save(account.accountId, session);
@@ -307,11 +311,35 @@ async function sendToOpenCode(
   sessionStore.addChatMessage(session, 'user', userText || '(图片)');
 
   let typingClientId: string | null = null;
+  let typingTicket = '';
   
   try {
-    typingClientId = await sender.sendTyping(fromUserId, contextToken);
+    const configResp = await api.getConfig(fromUserId, contextToken);
+    typingTicket = configResp.typing_ticket || '';
   } catch (err) {
-    logger.warn('Failed to send typing indicator', { error: err });
+    logger.warn('Failed to get typing ticket', { error: err });
+  }
+  
+  if (typingTicket) {
+    try {
+      typingClientId = await sender.sendTyping(fromUserId, typingTicket);
+    } catch (err) {
+      logger.warn('Failed to send typing indicator', { error: err });
+    }
+  }
+
+  let typingKeepalive: ReturnType<typeof setInterval> | null = null;
+  if (typingTicket) {
+    typingKeepalive = setInterval(async () => {
+      if (typingClientId) {
+        try {
+          await sender.sendTyping(fromUserId, typingTicket);
+          logger.debug('Typing keepalive sent');
+        } catch (err) {
+          logger.warn('Failed to send typing keepalive', { error: err });
+        }
+      }
+    }, 5000);
   }
 
   try {
@@ -359,13 +387,18 @@ async function sendToOpenCode(
 
     let result = await openCodeQuery(queryOptions);
 
-    if (typingClientId) {
+    if (typingClientId && typingTicket) {
       try {
-        await sender.stopTyping(fromUserId, contextToken, typingClientId);
+        await sender.stopTyping(fromUserId, typingTicket, typingClientId);
       } catch (err) {
         logger.warn('Failed to stop typing indicator', { error: err });
       }
       typingClientId = null;
+    }
+    
+    if (typingKeepalive) {
+      clearInterval(typingKeepalive);
+      typingKeepalive = null;
     }
 
     if (result.error) {
@@ -395,10 +428,16 @@ async function sendToOpenCode(
     session.state = 'idle';
     sessionStore.save(account.accountId, session);
   } catch (err) {
-    if (typingClientId) {
+    if (typingClientId && typingTicket) {
       try {
-        await sender.stopTyping(fromUserId, contextToken, typingClientId);
+        await sender.stopTyping(fromUserId, typingTicket, typingClientId);
       } catch {}
+      typingClientId = null;
+    }
+    
+    if (typingKeepalive) {
+      clearInterval(typingKeepalive);
+      typingKeepalive = null;
     }
     
     const errorMsg = err instanceof Error ? err.message : String(err);
