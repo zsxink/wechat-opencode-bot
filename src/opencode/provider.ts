@@ -51,11 +51,15 @@ function startOpenCodeService(cwd?: string): void {
   const workDir = cwd || process.cwd();
   
   if (process.platform === "win32") {
-    execSync(`cmd /c start /b opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`, {
-      stdio: "ignore",
-      windowsHide: true,
+    // Windows: 使用 spawn 后台启动
+    const { spawn } = require('child_process');
+    const child = spawn('opencode', ['serve', '--hostname', '127.0.0.1', '--port', String(OPENCODE_PORT)], {
       cwd: workDir,
+      detached: true,
+      stdio: 'ignore',
+      shell: true,
     });
+    child.unref();
   } else {
     execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
       stdio: "ignore",
