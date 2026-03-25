@@ -28,19 +28,16 @@ function getOpenCodePath(): string {
   // 尝试获取 opencode 的完整路径
   try {
     if (process.platform === "win32") {
-      const result = execSync("where opencode", { encoding: "utf-8" });
-      return result.trim().split('\n')[0];
+      const result = execSync("where opencode.cmd", { encoding: "utf-8" });
+      return result.trim().split('\n')[0].replace(/\r/g, '');
     } else {
       const result = execSync("which opencode", { encoding: "utf-8" });
       return result.trim();
     }
   } catch {
-    // 如果 where/which 失败，尝试使用 npm 全局路径
-    const npmRoot = execSync("npm root -g", { encoding: "utf-8" }).trim();
-    const binPath = join(npmRoot, '..', 'opencode');
-    if (process.platform === "win32") {
-      return binPath + '.cmd';
-    }
+    // 如果 where 失败，尝试使用 npm 全局路径
+    const npmRoot = execSync("npm root -g", { encoding: "utf-8" }).trim().replace(/\r/g, '');
+    const binPath = join(npmRoot, '..', 'opencode.cmd');
     return binPath;
   }
 }
