@@ -1,5 +1,6 @@
 import { logger } from "../logger.js";
-import { execSync, exec } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
+import { join } from "node:path";
 
 export interface QueryOptions {
   prompt: string;
@@ -33,7 +34,7 @@ function checkOpenCodeInstalled(): boolean {
   }
 }
 
-async function waitForService(url: string, maxAttempts: number = 30): Promise<boolean> {
+async function waitForService(url: string, maxAttempts: number = 120): Promise<boolean> {
   for (let i = 0; i < maxAttempts; i++) {
     try {
       const res = await fetch(`${url}/global/health`);
@@ -51,19 +52,23 @@ function startOpenCodeService(cwd?: string): void {
   const workDir = cwd || process.cwd();
   
   try {
-    if (process.platform === "win32") {
-      // Windows: 使用 cmd /c start 启动
-      const { exec } = require('child_process');
-      const cmd = `cmd /c start /b opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`;
-      exec(cmd, { cwd: workDir }, (err: any) => {
-        if (err) {
-          logger.error("Failed to start OpenCode", { error: err.message });
-        }
-      });
-    } else {
-      execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
-        stdio: "ignore",
+    if (process.platform === 'win32') {
+      const opencodePath = 'opencode.cmd';
+      const child = spawn(`${opencodePath} serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`, [], {
         cwd: workDir,
+        stdio: 'ignore',
+        detached: true,
+        shell: true  // 使用 shell 解释器
+      });
+      
+      child.unref();
+      logger.info("OpenCode service started successfully (detached process)");
+    } else {
+      const command = `opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`;
+      execSync(command, {
+        cwd: workDir,
+        stdio: 'ignore',
+        shell: '/bin/sh'
       });
     }
   } catch (e) {
@@ -140,7 +145,7 @@ async function sendPrompt(sessionId: string, parts: any[], model?: string, cwd?:
   logger.info("Sending prompt", { sessionId, url, partsCount: parts.length });
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000); // 60 秒超时
+  const timeout = setTimeout(() => controller.abort(), 1_800_000); // 30 分钟超时
 
   try {
     const res = await fetch(url, {
@@ -221,7 +226,15 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
     return { text, sessionId };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    logger.error("OpenCode query failed", { error: errorMessage });
+    const errorStack = err instanceof Error ? err.stack : undefined;
+    logger.error("OpenCode query failed", {
+      error: errorMessage,
+      stack: errorStack,
+      prompt: prompt?.substring(0, 100),
+      cwd,
+      resume: !!resume,
+      model,
+    });
     return { text: "", sessionId: "", error: errorMessage };
   }
 }
