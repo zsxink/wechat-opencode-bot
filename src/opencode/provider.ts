@@ -112,10 +112,13 @@ async function createSession(title: string): Promise<string> {
   return data.id;
 }
 
-async function sendPrompt(sessionId: string, parts: any[], model?: string): Promise<string> {
+async function sendPrompt(sessionId: string, parts: any[], model?: string, cwd?: string): Promise<string> {
   const body: any = { parts };
   if (model) {
     body.model = { providerID: "anthropic", modelID: model };
+  }
+  if (cwd) {
+    body.cwd = cwd;
   }
 
   const url = `${OPENCODE_URL}/session/${sessionId}/message`;
@@ -185,7 +188,7 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
       }
     }
 
-    const text = await sendPrompt(sessionId, parts, model);
+    const text = await sendPrompt(sessionId, parts, model, cwd);
 
     logger.info("OpenCode query completed", {
       sessionId,
