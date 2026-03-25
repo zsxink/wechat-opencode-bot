@@ -45,6 +45,20 @@ async function waitForService(url: string, maxAttempts: number = 120): Promise<b
   return false;
 }
 
+function findOpenCodePath(): string {
+  try {
+    if (process.platform === 'win32') {
+      const output = execSync('npm config get prefix', { encoding: 'utf-8', stdio: 'pipe' }).trim();
+      return join(output, 'opencode.cmd');
+    } else {
+      const output = execSync('which opencode', { encoding: 'utf-8', stdio: 'pipe' }).trim();
+      return output;
+    }
+  } catch {
+    return 'opencode';
+  }
+}
+
 function startOpenCodeService(cwd?: string): void {
   logger.info("Starting OpenCode service", { port: OPENCODE_PORT, cwd });
   console.log(`正在启动 OpenCode 服务 (端口: ${OPENCODE_PORT})...`);
@@ -53,15 +67,16 @@ function startOpenCodeService(cwd?: string): void {
   
   try {
     if (process.platform === 'win32') {
-      const opencodePath = 'opencode.cmd';
-      const child = spawn(`${opencodePath} serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`, [], {
+      const opencodePath = findOpenCodePath();
+      logger.info("Using opencode path", { path: opencodePath });
+      
+      spawn(`"${opencodePath}"`, ['serve', '--hostname', '127.0.0.1', '--port', String(OPENCODE_PORT)], {
         cwd: workDir,
         stdio: 'ignore',
         detached: true,
-        shell: true  // 使用 shell 解释器
-      });
+        shell: true
+      }).unref();
       
-      child.unref();
       logger.info("OpenCode service started successfully (detached process)");
     } else {
       const command = `opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`;
