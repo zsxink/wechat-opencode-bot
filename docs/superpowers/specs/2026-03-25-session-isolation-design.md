@@ -135,3 +135,21 @@ if (session.state === 'processing') {
 3. 消息队列处理是否正确
 4. /sessions 命令是否只显示微信创建的会话
 5. /session 命令是否能正确切换会话
+
+## 边界情况处理
+
+### 数据迁移
+- 从旧版本升级时，将 `sdkSessionId` 迁移到 `sessionsByCwd[workingDirectory]`
+- 如果 `sdkSessionId` 存在且 `sessionsByCwd` 为空，自动迁移
+
+### 会话删除
+- 如果 OpenCode 会话被外部删除，从 `sessionsByCwd` 中移除该记录
+- 下次发消息时创建新会话
+
+### 创建失败
+- 如果创建会话失败，返回错误消息给用户
+- 不保存无效的会话 ID
+
+### 并发处理
+- 同一工作目录的多个会话请求，只创建一个会话
+- 使用锁机制防止重复创建
