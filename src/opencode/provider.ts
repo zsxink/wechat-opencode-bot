@@ -1,4 +1,5 @@
 import { logger } from "../logger.js";
+import { execSync } from "node:child_process";
 
 export interface QueryOptions {
   prompt: string;
@@ -10,6 +11,7 @@ export interface QueryOptions {
     type: "image";
     source: { type: "base64"; media_type: string; data: string };
   }>;
+  title?: string;
 }
 
 export interface QueryResult {
@@ -19,6 +21,44 @@ export interface QueryResult {
 }
 
 const OPENCODE_URL = process.env.OPENCODE_URL || "http://localhost:4096";
+const OPENCODE_PORT = 4096;
+
+function checkOpenCodeInstalled(): boolean {
+  try {
+    const cmd = process.platform === "win32" ? "where opencode" : "which opencode";
+    execSync(cmd, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForService(url: string, maxAttempts: number = 30): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      const res = await fetch(`${url}/global/health`);
+      if (res.ok) return true;
+    } catch {}
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  return false;
+}
+
+function startOpenCodeService(): void {
+  logger.info("Starting OpenCode service", { port: OPENCODE_PORT });
+  console.log(`正在启动 OpenCode 服务 (端口: ${OPENCODE_PORT})...`);
+  
+  if (process.platform === "win32") {
+    execSync(`cmd /c start /b opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`, {
+      stdio: "ignore",
+      windowsHide: true,
+    });
+  } else {
+    execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
+      stdio: "ignore",
+    });
+  }
+}
 
 export async function initOpenCode(): Promise<void> {
   try {
@@ -27,13 +67,30 @@ export async function initOpenCode(): Promise<void> {
     const data = await res.json() as any;
     logger.info("OpenCode client connected", { version: data.version });
   } catch (err) {
-    logger.error("Failed to connect to OpenCode", { error: String(err) });
-    throw new Error(
-      `无法连接到 OpenCode 服务 (${OPENCODE_URL})。请确保：\n` +
-      `1. OpenCode 已安装: npm install -g opencode-ai\n` +
-      `2. OpenCode 服务已启动: opencode serve --hostname 127.0.0.1 --port 4096\n` +
-      `3. 或者通过环境变量 OPENCODE_URL 指定服务地址`
-    );
+    logger.warn("Failed to connect to OpenCode, checking installation");
+    
+    if (!checkOpenCodeInstalled()) {
+      throw new Error(
+        `OpenCode 未安装。请先安装：\n` +
+        `npm install -g opencode-ai`
+      );
+    }
+    
+    console.log("OpenCode 已安装，但服务未启动");
+    startOpenCodeService();
+    
+    console.log("等待 OpenCode 服务启动...");
+    const started = await waitForService(OPENCODE_URL);
+    
+    if (!started) {
+      throw new Error(
+        `OpenCode 服务启动失败或超时。\n` +
+        `请手动启动: opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`
+      );
+    }
+    
+    console.log("✅ OpenCode 服务已启动");
+    logger.info("OpenCode service started successfully");
   }
 }
 
@@ -103,19 +160,21 @@ async function sendPrompt(sessionId: string, parts: any[], model?: string): Prom
 }
 
 export async function openCodeQuery(options: QueryOptions): Promise<QueryResult> {
-  const { prompt, cwd, resume, model, images } = options;
+  const { prompt, cwd, resume, model, images, title } = options;
 
   logger.info("Starting OpenCode query", {
     cwd,
     model,
     resume: !!resume,
     hasImages: !!images?.length,
+    title,
   });
 
   try {
     let sessionId = resume || "";
     if (!sessionId) {
-      sessionId = await createSession("WeChat Bot Session");
+      const sessionTitle = title || "微信: 会话";
+      sessionId = await createSession(sessionTitle);
     }
 
     const parts: any[] = [{ type: "text", text: prompt }];
