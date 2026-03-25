@@ -70,14 +70,14 @@ function startOpenCodeService(cwd?: string): void {
       const opencodePath = findOpenCodePath();
       logger.info("Using opencode path", { path: opencodePath });
       
-      spawn(`"${opencodePath}"`, ['serve', '--hostname', '127.0.0.1', '--port', String(OPENCODE_PORT)], {
+      const command = `& "${opencodePath}" serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`;
+      const child = spawn('powershell.exe', ['-Command', command], {
         cwd: workDir,
-        stdio: 'ignore',
-        detached: true,
-        shell: true
-      }).unref();
+        stdio: 'ignore'
+      });
+      child.unref();
       
-      logger.info("OpenCode service started successfully (detached process)");
+      logger.info("OpenCode service started successfully");
     } else {
       const command = `opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`;
       execSync(command, {
@@ -181,12 +181,21 @@ async function sendPrompt(sessionId: string, parts: any[], model?: string, cwd?:
     const text = await res.text();
     logger.info("Raw response", { length: text.length, preview: text.substring(0, 100) });
 
+    if (!text || text.trim() === '') {
+      logger.error("Empty response from OpenCode", { 
+        status: res.status, 
+        url,
+        cwd 
+      });
+      throw new Error('OpenCode 返回了空响应。请确保 OpenCode 服务配置正确，且工作目录存在。');
+    }
+
     let data: any;
     try {
       data = JSON.parse(text);
     } catch (e) {
       logger.error("JSON parse failed", { text: text.substring(0, 200) });
-      throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+      throw new Error(`OpenCode 返回了无效的响应格式。请检查 OpenCode 服务状态和配置。原始响应: ${text.substring(0, 100)}`);
     }
 
     let responseText = "";
