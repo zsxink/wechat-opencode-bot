@@ -55,6 +55,28 @@ switch ($Command) {
         $stdoutLog = Join-Path $DataDir "logs\stdout.log"
         $stderrLog = Join-Path $DataDir "logs\stderr.log"
 
+        # 先启动 OpenCode 服务
+        $opencodeRunning = $false
+        try {
+            $conn = Get-NetTCPConnection -LocalPort 4096 -ErrorAction SilentlyContinue
+            if ($conn) { $opencodeRunning = $true }
+        } catch {}
+
+        if (-not $opencodeRunning) {
+            Write-Log "Starting OpenCode service on port 4096..."
+            $configFile = Join-Path $DataDir "config.env"
+            $workDir = $env:USERPROFILE
+            if (Test-Path $configFile) {
+                $config = Get-Content $configFile | Where-Object { $_ -match "^workingDirectory=" }
+                if ($config) {
+                    $workDir = $config -replace "^workingDirectory=", ""
+                }
+            }
+            Start-Process -FilePath "opencode" -ArgumentList "serve", "--hostname", "127.0.0.1", "--port", "4096" -WorkingDirectory $workDir -WindowStyle Hidden
+            Start-Sleep -Seconds 3
+            Write-Log "OpenCode service started"
+        }
+
         $nodePath = (Get-Command node -ErrorAction SilentlyContinue).Source
         if (-not $nodePath) {
             Write-Log "Error: node not found in PATH"
@@ -82,15 +104,24 @@ switch ($Command) {
     }
 
     "stop" {
+        # 先停止 OpenCode 服务
+        try {
+            $conn = Get-NetTCPConnection -LocalPort 4096 -ErrorAction SilentlyContinue
+            if ($conn) {
+                Stop-Process -Id $conn.OwningProcess -Force -ErrorAction SilentlyContinue
+                Write-Log "Stopped OpenCode service (port 4096)"
+            }
+        } catch {}
+
         $pid = Get-Status
         if (-not $pid) {
-            Write-Log "Not running"
+            Write-Log "Bot not running"
             exit 0
         }
 
         try {
             Stop-Process -Id $pid -Force -ErrorAction Stop
-            Write-Log "Stopped (PID: $pid)"
+            Write-Log "Stopped bot (PID: $pid)"
         } catch {
             Write-Log "Could not stop process: $_"
         }
