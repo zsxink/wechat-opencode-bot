@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
 import process from 'node:process';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { mkdirSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { execSync, spawn } from 'node:child_process';
 
@@ -584,7 +584,7 @@ if (command === '--setup' || command === 'setup') {
     console.log(`wechat-opencode-bot 已在后台运行 (PID: ${status.pid})`);
     process.exit(0);
   }
-  
+
   if (process.platform === 'win32') {
     try {
       const command = `Start-Process -FilePath "node" -ArgumentList "dist/main.js","--daemon" -WorkingDirectory "${process.cwd()}" -WindowStyle Hidden`;
@@ -597,20 +597,29 @@ if (command === '--setup' || command === 'setup') {
     } catch (e) {
       console.error('启动失败:', e);
     }
-  }
-  
-  console.log('正在后台启动 wechat-opencode-bot...');
-  
-  const pidFile = getPidFile();
-  
-  runDaemon().catch((err) => {
-    logger.error('Daemon start failed', { error: err instanceof Error ? err.message : String(err) });
-    console.error('启动失败:', err);
-    if (existsSync(pidFile)) {
-      unlinkSync(pidFile);
+  } else {
+    const pidFile = getPidFile();
+    const logFile = join(dirname(pidFile), 'logs', 'stdout.log');
+
+    try {
+      const nodeBin = process.execPath;
+      const mainJs = join(process.cwd(), 'dist', 'main.js');
+
+      execSync(`mkdir -p "${dirname(logFile)}"`);
+
+      const startCmd = `nohup "${nodeBin}" "${mainJs}" --daemon >> "${logFile}" 2>&1 &`;
+      execSync(startCmd, { stdio: 'ignore', shell: '/bin/sh' });
+
+      const pid = execSync(`echo $!`, { shell: '/bin/sh' }).toString().trim();
+      writeFileSync(pidFile, pid, 'utf-8');
+
+      console.log('wechat-opencode-bot 已在后台启动');
+      process.exit(0);
+    } catch (e) {
+      console.error('启动失败:', e);
+      process.exit(1);
     }
-    process.exit(1);
-  });
+  }
 } else if (command === '--daemon') {
   const pidFile = getPidFile();
   
