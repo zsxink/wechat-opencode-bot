@@ -1,5 +1,5 @@
 import { logger } from "../logger.js";
-import { execSync } from "node:child_process";
+import { execSync, exec } from "node:child_process";
 
 export interface QueryOptions {
   prompt: string;
@@ -52,10 +52,17 @@ function startOpenCodeService(cwd?: string): void {
   
   try {
     if (process.platform === "win32") {
-      // Windows: 使用 PowerShell 后台启动
-      execSync(`powershell -Command "Start-Process -FilePath opencode -ArgumentList 'serve','--hostname','127.0.0.1','--port','${OPENCODE_PORT}' -WorkingDirectory '${workDir}' -WindowStyle Hidden"`, {
-        stdio: 'ignore',
-      });
+      // Windows: 使用 PowerShell 直接调用
+      const { exec } = require('child_process');
+      exec(
+        `powershell -NoProfile -Command "Start-Process -FilePath opencode -ArgumentList 'serve','--hostname','127.0.0.1','--port','${OPENCODE_PORT}' -WorkingDirectory '${workDir.replace(/\\/g, '\\\\')}' -WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id"`,
+        { windowsHide: true },
+        (err: any) => {
+          if (err) {
+            logger.error("Failed to start OpenCode", { error: err.message });
+          }
+        }
+      );
     } else {
       execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
         stdio: "ignore",
