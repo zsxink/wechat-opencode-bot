@@ -486,14 +486,15 @@ function stopOpenCodeService(): void {
 }
 
 function runStop(): void {
+  // 先停止 OpenCode 服务（无论 bot 是否运行）
+  stopOpenCodeService();
+  
   const status = getDaemonStatus();
   
   if (!status.running) {
-    console.log('服务未运行');
+    console.log('wechat-opencode-bot 未在后台运行');
     return;
   }
-  
-  stopOpenCodeService();
   
   try {
     process.kill(status.pid!, 'SIGTERM');
