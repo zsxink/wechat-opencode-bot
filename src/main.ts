@@ -1,7 +1,8 @@
 import { createInterface } from 'node:readline';
 import process from 'node:process';
 import { join } from 'node:path';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync, unlinkSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 
 import { loadLatestAccount } from './wechat/accounts.js';
 import { startQrLogin, waitForQrScan, displayQrInTerminal } from './wechat/login.js';
@@ -295,7 +296,25 @@ async function sendToOpenCode(
 
   sessionStore.addChatMessage(session, 'user', userText || '(图片)');
 
+  let typingClientId: string | null = null;
+  
   try {
+    typingClientId = await sender.sendTyping(fromUserId, contextToken);
+  } catch (err) {
+    logger.warn('Failed to send typing indicator', { error: err });
+  }
+
+  try {
+    const cwd = session.workingDirectory || config.workingDirectory;
+    let sessionId = session.sessionsByCwd[cwd];
+
+    let sessionTitle: string | undefined;
+    if (!sessionId) {
+      const userMessage = userText || '(图片)';
+      const summary = userMessage.substring(0, 20) + (userMessage.length > 20 ? '...' : '');
+      sessionTitle = `微信: ${summary}`;
+    }
+
     let images: QueryOptions['images'];
     if (imageItem) {
       const base64DataUri = await downloadImage(imageItem);
@@ -320,14 +339,24 @@ async function sendToOpenCode(
 
     const queryOptions: QueryOptions = {
       prompt: userText || '请分析这张图片',
-      cwd: session.workingDirectory || config.workingDirectory,
-      resume: session.sdkSessionId,
+      cwd,
+      resume: sessionId,
       model: session.model,
       permissionMode: effectivePermissionMode,
       images,
+      title: sessionTitle,
     };
 
     let result = await openCodeQuery(queryOptions);
+
+    if (typingClientId) {
+      try {
+        await sender.stopTyping(fromUserId, contextToken, typingClientId);
+      } catch (err) {
+        logger.warn('Failed to stop typing indicator', { error: err });
+      }
+      typingClientId = null;
+    }
 
     if (result.error) {
       logger.error('OpenCode query error', { error: result.error });
@@ -343,10 +372,25 @@ async function sendToOpenCode(
       await sender.sendText(fromUserId, contextToken, 'ℹ️ OpenCode 无返回内容');
     }
 
-    session.sdkSessionId = result.sessionId || undefined;
+    if (result.sessionId) {
+      session.sessionsByCwd[cwd] = result.sessionId;
+      if (!session.wechatSessions.includes(result.sessionId)) {
+        session.wechatSessions.push(result.sessionId);
+      }
+      if (sessionTitle) {
+        session.sessionTitles[result.sessionId] = sessionTitle;
+      }
+    }
+
     session.state = 'idle';
     sessionStore.save(account.accountId, session);
   } catch (err) {
+    if (typingClientId) {
+      try {
+        await sender.stopTyping(fromUserId, contextToken, typingClientId);
+      } catch {}
+    }
+    
     const errorMsg = err instanceof Error ? err.message : String(err);
     logger.error('Error in sendToOpenCode', { error: errorMsg });
     await sender.sendText(fromUserId, contextToken, '⚠️ 处理消息时出错，请稍后重试。');
@@ -376,6 +420,114 @@ wechat-opencode-bot - 微信接入 OpenCode
 `);
 }
 
+function getPidFile(): string {
+  return join(DATA_DIR, 'daemon.pid');
+}
+
+function getDaemonStatus(): { running: boolean; pid?: number } {
+  const pidFile = getPidFile();
+  if (!existsSync(pidFile)) {
+    return { running: false };
+  }
+  
+  try {
+    const pidStr = readFileSync(pidFile, 'utf-8').trim();
+    const pid = parseInt(pidStr, 10);
+    if (isNaN(pid)) {
+      return { running: false };
+    }
+    
+    try {
+      process.kill(pid, 0);
+      return { running: true, pid };
+    } catch {
+      return { running: false };
+    }
+  } catch {
+    return { running: false };
+  }
+}
+
+function findProcessOnPort(port: number): number | null {
+  try {
+    if (process.platform === 'win32') {
+      const output = execSync(`netstat -ano | findstr :${port}`, { encoding: 'utf-8' });
+      const lines = output.split('\n');
+      for (const line of lines) {
+        if (line.includes(`:${port}`) && line.includes('LISTENING')) {
+          const parts = line.trim().split(/\s+/);
+          const pid = parseInt(parts[parts.length - 1], 10);
+          if (!isNaN(pid)) return pid;
+        }
+      }
+    } else {
+      const output = execSync(`lsof -ti:${port}`, { encoding: 'utf-8' });
+      const pid = parseInt(output.trim(), 10);
+      if (!isNaN(pid)) return pid;
+    }
+  } catch {}
+  return null;
+}
+
+function stopOpenCodeService(): void {
+  const OPENCODE_PORT = 4096;
+  const pid = findProcessOnPort(OPENCODE_PORT);
+  
+  if (pid) {
+    try {
+      process.kill(pid, 'SIGTERM');
+      console.log(`已停止 OpenCode 服务 (端口: ${OPENCODE_PORT}, PID: ${pid})`);
+    } catch (err) {
+      console.error(`停止 OpenCode 服务失败: ${err}`);
+    }
+  } else {
+    console.log(`未发现运行在端口 ${OPENCODE_PORT} 的 OpenCode 服务`);
+  }
+}
+
+function runStop(): void {
+  const status = getDaemonStatus();
+  
+  if (!status.running) {
+    console.log('服务未运行');
+    return;
+  }
+  
+  stopOpenCodeService();
+  
+  try {
+    process.kill(status.pid!, 'SIGTERM');
+    console.log(`已停止 wechat-opencode-bot (PID: ${status.pid})`);
+  } catch (err) {
+    console.error(`停止 wechat-opencode-bot 失败: ${err}`);
+  }
+  
+  const pidFile = getPidFile();
+  if (existsSync(pidFile)) {
+    try {
+      unlinkSync(pidFile);
+    } catch {}
+  }
+}
+
+function runStatus(): void {
+  const status = getDaemonStatus();
+  
+  if (status.running) {
+    console.log(`wechat-opencode-bot 运行中 (PID: ${status.pid})`);
+  } else {
+    console.log('wechat-opencode-bot 未运行');
+  }
+  
+  const OPENCODE_PORT = 4096;
+  const opencodePid = findProcessOnPort(OPENCODE_PORT);
+  if (opencodePid) {
+    console.log(`OpenCode 服务运行中 (端口: ${OPENCODE_PORT}, PID: ${opencodePid})`);
+  } else {
+    console.log(`OpenCode 服务未运行 (端口: ${OPENCODE_PORT})`);
+  }
+}
+
 if (command === '--setup' || command === 'setup') {
   runSetup().catch((err) => {
     logger.error('Setup failed', { error: err instanceof Error ? err.message : String(err) });
@@ -388,6 +540,10 @@ if (command === '--setup' || command === 'setup') {
     console.error('启动失败:', err);
     process.exit(1);
   });
+} else if (command === '--stop' || command === 'stop') {
+  runStop();
+} else if (command === '--status' || command === 'status') {
+  runStatus();
 } else if (command === '--help' || command === '-h') {
   showHelp();
 } else {
