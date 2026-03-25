@@ -132,42 +132,50 @@ async function sendPrompt(sessionId: string, parts: any[], model?: string, cwd?:
   const url = `${OPENCODE_URL}/session/${sessionId}/message`;
   logger.info("Sending prompt", { sessionId, url, partsCount: parts.length });
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000); // 60 秒超时
 
-  logger.info("Prompt response", { status: res.status, contentType: res.headers.get("content-type") });
-
-  if (!res.ok) {
-    const text = await res.text();
-    logger.error("Prompt failed", { status: res.status, body: text.substring(0, 200) });
-    throw new Error(`Prompt failed: ${res.status} - ${text}`);
-  }
-
-  const text = await res.text();
-  logger.info("Raw response", { length: text.length, preview: text.substring(0, 100) });
-
-  let data: any;
   try {
-    data = JSON.parse(text);
-  } catch (e) {
-    logger.error("JSON parse failed", { text: text.substring(0, 200) });
-    throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
-  }
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
 
-  let responseText = "";
-  if (data.parts) {
-    responseText = data.parts
-      .filter((p: any) => p.type === "text" && p.text)
-      .map((p: any) => p.text)
-      .join("\n");
-  } else if (data.info?.text) {
-    responseText = data.info.text;
-  }
+    logger.info("Prompt response", { status: res.status, contentType: res.headers.get("content-type") });
 
-  return responseText;
+    if (!res.ok) {
+      const text = await res.text();
+      logger.error("Prompt failed", { status: res.status, body: text.substring(0, 200) });
+      throw new Error(`Prompt failed: ${res.status} - ${text}`);
+    }
+
+    const text = await res.text();
+    logger.info("Raw response", { length: text.length, preview: text.substring(0, 100) });
+
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+      logger.error("JSON parse failed", { text: text.substring(0, 200) });
+      throw new Error(`Invalid JSON response: ${text.substring(0, 100)}`);
+    }
+
+    let responseText = "";
+    if (data.parts) {
+      responseText = data.parts
+        .filter((p: any) => p.type === "text" && p.text)
+        .map((p: any) => p.text)
+        .join("\n");
+    } else if (data.info?.text) {
+      responseText = data.info.text;
+    }
+
+    return responseText;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function openCodeQuery(options: QueryOptions): Promise<QueryResult> {
