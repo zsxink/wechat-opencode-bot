@@ -52,11 +52,9 @@ function startOpenCodeService(cwd?: string): void {
   
   try {
     if (process.platform === "win32") {
-      // Windows: 使用 execSync 后台启动
-      execSync(`start /b opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`, {
-        cwd: workDir,
+      // Windows: 使用 PowerShell 后台启动
+      execSync(`powershell -Command "Start-Process -FilePath opencode -ArgumentList 'serve','--hostname','127.0.0.1','--port','${OPENCODE_PORT}' -WorkingDirectory '${workDir}' -WindowStyle Hidden"`, {
         stdio: 'ignore',
-        shell: process.env.COMSPEC || 'cmd.exe',
       });
     } else {
       execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
@@ -65,8 +63,7 @@ function startOpenCodeService(cwd?: string): void {
       });
     }
   } catch (e) {
-    // 忽略错误，稍后会检查服务是否启动
-    logger.warn("Start command failed, will check if service started anyway");
+    logger.warn("Start command failed", { error: String(e) });
   }
 }
 
