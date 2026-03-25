@@ -187,7 +187,7 @@ async function sendPrompt(sessionId: string, parts: any[], model?: string, cwd?:
         url,
         cwd 
       });
-      throw new Error('OpenCode 返回了空响应。请确保 OpenCode 服务配置正确，且工作目录存在。');
+      throw new Error('OpenCode 返回了空响应。这通常是因为：1) 工作目录不存在；2) AI 模型的 API Key 未配置。请检查 OpenCode 服务配置，并设置 ANTHROPIC_API_KEY 或其他 AI 模型的 API Key。');
     }
 
     let data: any;
