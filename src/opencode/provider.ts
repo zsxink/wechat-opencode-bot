@@ -1,6 +1,5 @@
 import { logger } from "../logger.js";
-import { execSync, execFile } from "node:child_process";
-import { join } from "node:path";
+import { execSync, spawn } from "node:child_process";
 
 export interface QueryOptions {
   prompt: string;
@@ -52,15 +51,13 @@ function startOpenCodeService(cwd?: string): void {
   const workDir = cwd || process.cwd();
   
   if (process.platform === "win32") {
-    // Windows: 使用 execFile 后台启动
-    execFile('cmd', ['/c', 'start', '/b', 'opencode', 'serve', '--hostname', '127.0.0.1', '--port', String(OPENCODE_PORT)], {
+    // Windows: 使用 cmd.exe 执行 opencode.cmd
+    const child = spawn('cmd.exe', ['/c', 'opencode', 'serve', '--hostname', '127.0.0.1', '--port', String(OPENCODE_PORT)], {
       cwd: workDir,
-      windowsHide: true,
-    }, (error) => {
-      if (error) {
-        logger.error("Failed to start OpenCode", { error: error.message });
-      }
+      detached: true,
+      stdio: 'ignore',
     });
+    child.unref();
   } else {
     execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
       stdio: "ignore",
