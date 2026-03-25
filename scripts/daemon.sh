@@ -112,7 +112,7 @@ macos_status() {
 macos_logs() {
   local log_dir="${DATA_DIR}/logs"
   if [ -d "$log_dir" ]; then
-    local latest=$(ls -t "${log_dir}"/bridge-*.log 2>/dev/null | head -1)
+    local latest=$(ls -t "${log_dir}"/wechat-opencode-bot-*.log 2>/dev/null | head -1)
     if [ -n "$latest" ]; then
       tail -100 "$latest"
     else

@@ -1,15 +1,28 @@
 import { mkdirSync, appendFileSync, readdirSync, unlinkSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join } from "node:path";
 import { homedir } from "node:os";
 
 const LOG_DIR = join(homedir(), ".wechat-opencode-bot", "logs");
-const MAX_LOG_FILES = 30; // Keep at most 30 days of logs
+const MAX_LOG_FILES = 3;
 
-/** Clean up old log files beyond MAX_LOG_FILES retention. */
+function getLocalDate(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getLocalTimestamp(): string {
+  const now = new Date();
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+}
+
 function cleanupOldLogs(): void {
   try {
     const files = readdirSync(LOG_DIR)
-      .filter((f) => f.startsWith("bot-") && f.endsWith(".log"))
+      .filter((f) => f.startsWith("wechat-opencode-bot-") && f.endsWith(".log"))
       .sort();
     while (files.length > MAX_LOG_FILES) {
       unlinkSync(join(LOG_DIR, files.shift()!));
@@ -19,20 +32,12 @@ function cleanupOldLogs(): void {
   }
 }
 
-/**
- * Redact sensitive values from a string:
- * - Bearer tokens (Authorization headers)
- * - aes_key values
- * - generic token/secret values in JSON payloads
- */
 export function redact(obj: unknown): string {
   const raw = typeof obj === "string" ? obj : JSON.stringify(obj);
   if (!raw) return raw;
 
   let safe = raw;
-  // Mask Bearer tokens: "Bearer <anything>"
   safe = safe.replace(/Bearer\s+[^\s"\\]+/gi, "Bearer ***");
-  // Mask generic token/secret/password/api_key values in JSON
   safe = safe.replace(
     /"(?:(?:[\w]+_)?token|secret|password|api_key)"\s*:\s*"[^"]*"/gi,
     (match) => {
@@ -49,14 +54,13 @@ function ensureLogDir(): void {
 }
 
 function getLogFilePath(): string {
-  const now = new Date();
-  const date = now.toISOString().slice(0, 10); // YYYY-MM-DD
-  return join(LOG_DIR, `bridge-${date}.log`);
+  const date = getLocalDate();
+  return join(LOG_DIR, `wechat-opencode-bot-${date}.log`);
 }
 
 function writeLogLine(level: string, message: string, data?: unknown): void {
   ensureLogDir();
-  const timestamp = new Date().toISOString();
+  const timestamp = getLocalTimestamp();
   const parts = [timestamp, level, message];
   if (data !== undefined) {
     parts.push(redact(data));
