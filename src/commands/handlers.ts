@@ -44,8 +44,16 @@ export function handleClear(ctx: CommandContext): CommandResult {
 
 export function handleNew(ctx: CommandContext): CommandResult {
   ctx.rejectPendingPermission?.();
+  
+  // 清除当前工作目录的会话 ID
+  const cwd = ctx.session.workingDirectory;
+  if (ctx.session.sessionsByCwd && cwd) {
+    delete ctx.session.sessionsByCwd[cwd];
+  }
+  
   ctx.updateSession({
     sdkSessionId: undefined,
+    sessionsByCwd: ctx.session.sessionsByCwd,
     chatHistory: [],
   });
   return { reply: '🆕 已创建新会话，上下文已清空。', handled: true };
