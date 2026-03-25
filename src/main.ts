@@ -1,8 +1,8 @@
 import { createInterface } from 'node:readline';
 import process from 'node:process';
 import { join } from 'node:path';
-import { mkdirSync, existsSync, readFileSync, unlinkSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { mkdirSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { execSync, spawn } from 'node:child_process';
 
 import { loadLatestAccount } from './wechat/accounts.js';
 import { startQrLogin, waitForQrScan, displayQrInTerminal } from './wechat/login.js';
@@ -546,9 +546,59 @@ if (command === '--setup' || command === 'setup') {
     process.exit(1);
   });
 } else if (command === '--start' || command === 'start' || !command) {
+  const status = getDaemonStatus();
+  if (status.running) {
+    console.log(`wechat-opencode-bot 已在后台运行 (PID: ${status.pid})`);
+    process.exit(0);
+  }
+  
+  if (process.platform === 'win32') {
+    try {
+      const command = `Start-Process -FilePath "node" -ArgumentList "dist/main.js","--daemon" -WorkingDirectory "${process.cwd()}" -WindowStyle Hidden`;
+      execSync(`powershell.exe -Command "${command}"`, {
+        stdio: 'ignore',
+        shell: 'powershell.exe'
+      });
+      console.log('wechat-opencode-bot 已在后台启动');
+      process.exit(0);
+    } catch (e) {
+      console.error('启动失败:', e);
+    }
+  }
+  
+  console.log('正在后台启动 wechat-opencode-bot...');
+  
+  const pidFile = getPidFile();
+  
   runDaemon().catch((err) => {
     logger.error('Daemon start failed', { error: err instanceof Error ? err.message : String(err) });
     console.error('启动失败:', err);
+    if (existsSync(pidFile)) {
+      unlinkSync(pidFile);
+    }
+    process.exit(1);
+  });
+} else if (command === '--daemon') {
+  const pidFile = getPidFile();
+  
+  const config = loadConfig();
+  console.log(`工作目录: ${config.workingDirectory}`);
+  console.log(`进程目录: ${process.cwd()}`);
+  console.log(`PID: ${process.pid}`);
+  
+  try {
+    writeFileSync(pidFile, String(process.pid), 'utf-8');
+    console.log(`wechat-opencode-bot 已启动 (PID: ${process.pid})`);
+  } catch (err) {
+    console.error('保存 PID 失败:', err);
+  }
+  
+  runDaemon().catch((err) => {
+    logger.error('Daemon failed', { error: err instanceof Error ? err.message : String(err) });
+    console.error('运行失败:', err);
+    if (existsSync(pidFile)) {
+      unlinkSync(pidFile);
+    }
     process.exit(1);
   });
 } else if (command === '--stop' || command === 'stop') {

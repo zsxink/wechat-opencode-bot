@@ -70,12 +70,11 @@ function startOpenCodeService(cwd?: string): void {
       const opencodePath = findOpenCodePath();
       logger.info("Using opencode path", { path: opencodePath });
       
-      const command = `& "${opencodePath}" serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`;
-      const child = spawn('powershell.exe', ['-Command', command], {
-        cwd: workDir,
-        stdio: 'ignore'
+      const command = `Start-Process -FilePath "powershell.exe" -ArgumentList '-Command', '& "${opencodePath}" serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}' -WorkingDirectory "${workDir}" -WindowStyle Hidden`;
+      execSync(command, {
+        stdio: 'ignore',
+        shell: 'powershell.exe'
       });
-      child.unref();
       
       logger.info("OpenCode service started successfully");
     } else {
