@@ -2,6 +2,7 @@ import type { CommandContext, CommandResult } from './router.js';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getWechatSessionList } from '../session.js';
 
 const HELP_TEXT = `可用命令：
 
@@ -14,6 +15,8 @@ const HELP_TEXT = `可用命令：
   /compact          压缩上下文（开始新 SDK 会话，保留历史）
   /history [数量]   查看对话记录（默认最近20条）
   /undo [数量]      撤销最近对话（默认1条）
+  /sessions         查看微信会话列表
+  /session <ID>     切换到指定会话
 
 配置：
   /cwd [路径]       查看或切换工作目录
@@ -231,6 +234,62 @@ export function handleVersion(): CommandResult {
   } catch {
     return { reply: 'wechat-opencode-bot (version unknown)', handled: true };
   }
+}
+
+export function handleSessions(ctx: CommandContext): CommandResult {
+  const sessions = getWechatSessionList(ctx.session);
+  
+  if (sessions.length === 0) {
+    return { reply: '暂无微信会话记录', handled: true };
+  }
+
+  const lines = sessions.map((s, i) => 
+    `${i + 1}. ${s.title}\n   ID: ${s.id}\n   目录: ${s.cwd}`
+  );
+
+  return { 
+    reply: `📋 微信会话列表：\n\n${lines.join('\n\n')}\n\n使用 /session <ID> 切换会话`, 
+    handled: true 
+  };
+}
+
+export function handleSession(ctx: CommandContext, args: string): CommandResult {
+  if (!args) {
+    const currentCwd = ctx.session.workingDirectory;
+    const currentSessionId = ctx.session.sessionsByCwd?.[currentCwd];
+    const currentTitle = currentSessionId ? ctx.session.sessionTitles?.[currentSessionId] : '无';
+    
+    return { 
+      reply: `当前会话：${currentTitle || '无'}\nID: ${currentSessionId || '无'}\n\n用法: /session <会话ID>`, 
+      handled: true 
+    };
+  }
+
+  const targetSessionId = args.trim();
+  
+  if (!ctx.session.wechatSessions?.includes(targetSessionId)) {
+    return { reply: '⚠️ 未找到该会话，只能切换微信创建的会话', handled: true };
+  }
+
+  let targetCwd: string | undefined;
+  for (const [cwd, sessionId] of Object.entries(ctx.session.sessionsByCwd || {})) {
+    if (sessionId === targetSessionId) {
+      targetCwd = cwd;
+      break;
+    }
+  }
+
+  if (!targetCwd) {
+    return { reply: '⚠️ 未找到该会话对应的工作目录', handled: true };
+  }
+
+  ctx.updateSession({ workingDirectory: targetCwd });
+  
+  const title = ctx.session.sessionTitles?.[targetSessionId] || '未命名会话';
+  return { 
+    reply: `✅ 已切换到会话：${title}\n工作目录: ${targetCwd}`, 
+    handled: true 
+  };
 }
 
 export function handleUnknown(cmd: string, args: string): CommandResult {
