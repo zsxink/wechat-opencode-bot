@@ -52,10 +52,11 @@ function startOpenCodeService(cwd?: string): void {
   
   try {
     if (process.platform === "win32") {
-      // Windows: 使用 PowerShell 直接调用
+      // Windows: 使用 PowerShell bypass 执行策略
       const { exec } = require('child_process');
+      const psCmd = `powershell -ExecutionPolicy Bypass -NoProfile -Command "Start-Process -FilePath opencode -ArgumentList 'serve','--hostname','127.0.0.1','--port','${OPENCODE_PORT}' -WorkingDirectory '${workDir.replace(/\\/g, '\\\\')}' -WindowStyle Hidden -PassThru"`;
       exec(
-        `powershell -NoProfile -Command "Start-Process -FilePath opencode -ArgumentList 'serve','--hostname','127.0.0.1','--port','${OPENCODE_PORT}' -WorkingDirectory '${workDir.replace(/\\/g, '\\\\')}' -WindowStyle Hidden -PassThru | Select-Object -ExpandProperty Id"`,
+        psCmd,
         { windowsHide: true },
         (err: any) => {
           if (err) {
