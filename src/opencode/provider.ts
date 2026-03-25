@@ -1,5 +1,5 @@
 import { logger } from "../logger.js";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 
 export interface QueryOptions {
   prompt: string;
@@ -52,7 +52,6 @@ function startOpenCodeService(cwd?: string): void {
   
   if (process.platform === "win32") {
     // Windows: 使用 spawn 后台启动
-    const { spawn } = require('child_process');
     const child = spawn('opencode', ['serve', '--hostname', '127.0.0.1', '--port', String(OPENCODE_PORT)], {
       cwd: workDir,
       detached: true,
