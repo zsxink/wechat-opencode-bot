@@ -94,12 +94,16 @@ export async function initOpenCode(): Promise<void> {
   }
 }
 
-async function createSession(title: string): Promise<string> {
-  logger.info("Creating OpenCode session", { title });
+async function createSession(title: string, cwd?: string): Promise<string> {
+  logger.info("Creating OpenCode session", { title, cwd });
+  const body: any = { title };
+  if (cwd) {
+    body.cwd = cwd;
+  }
   const res = await fetch(`${OPENCODE_URL}/session`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify(body),
   });
   logger.info("Session create response", { status: res.status, contentType: res.headers.get("content-type") });
   if (!res.ok) {
@@ -177,7 +181,7 @@ export async function openCodeQuery(options: QueryOptions): Promise<QueryResult>
     let sessionId = resume || "";
     if (!sessionId) {
       const sessionTitle = title || "微信: 会话";
-      sessionId = await createSession(sessionTitle);
+      sessionId = await createSession(sessionTitle, cwd);
     }
 
     const parts: any[] = [{ type: "text", text: prompt }];
