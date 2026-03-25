@@ -69,7 +69,7 @@ export function handleCwd(ctx: CommandContext, args: string): CommandResult {
 
 export function handleModel(ctx: CommandContext, args: string): CommandResult {
   if (!args) {
-    return { reply: '用法: /model <模型名称>\n例: /model claude-sonnet-4-20250514', handled: true };
+    return { reply: '用法: /model <模型ID>\n例: /model mimo-v2-pro-free', handled: true };
   }
   ctx.updateSession({ model: args });
   return { reply: `✅ 模型已切换为: ${args}`, handled: true };
@@ -211,12 +211,19 @@ export async function handleModels(ctx: CommandContext): Promise<CommandResult> 
       return { reply: '⚠️ 未找到可用的模型提供商', handled: true };
     }
 
-    const lines: string[] = ['📋 可用模型：', ''];
+    const lines: string[] = ['📋 可用模型（使用 /model <ID> 切换）：', ''];
 
     for (const provider of providers) {
       lines.push(`【${provider.name || provider.id}】`);
-      const models = provider.models || [];
-      for (const model of models) {
+      
+      let modelList: any[] = [];
+      if (Array.isArray(provider.models)) {
+        modelList = provider.models;
+      } else if (typeof provider.models === 'object' && provider.models !== null) {
+        modelList = Object.values(provider.models);
+      }
+      
+      for (const model of modelList) {
         lines.push(`  - ${model.id}`);
       }
       lines.push('');
@@ -225,6 +232,9 @@ export async function handleModels(ctx: CommandContext): Promise<CommandResult> 
     const currentModel = ctx.session.model;
     if (currentModel) {
       lines.push(`当前模型: ${currentModel}`);
+    } else {
+      lines.push('');
+      lines.push('💡 示例: /model mimo-v2-pro-free');
     }
 
     return { reply: lines.join('\n'), handled: true };

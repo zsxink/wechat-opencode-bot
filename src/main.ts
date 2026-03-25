@@ -87,6 +87,8 @@ async function runSetup(): Promise<void> {
   console.log('\n运行 npm run daemon 启动服务');
 }
 
+const processingMsgIds = new Set<string>();
+
 async function runDaemon(): Promise<void> {
   const config = loadConfig();
   const account = loadLatestAccount();
@@ -163,6 +165,14 @@ async function handleMessage(
 ): Promise<void> {
   if (msg.message_type !== MessageType.USER) return;
   if (!msg.from_user_id || !msg.item_list) return;
+
+  const msgId = `${msg.from_user_id}-${msg.context_token}`;
+  if (processingMsgIds.has(msgId)) {
+    logger.warn('Message already being processed, skipping', { msgId });
+    return;
+  }
+  processingMsgIds.add(msgId);
+  setTimeout(() => processingMsgIds.delete(msgId), 60000);
 
   const contextToken = msg.context_token ?? '';
   const fromUserId = msg.from_user_id;

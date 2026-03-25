@@ -147,17 +147,47 @@ async function createSession(title: string, cwd?: string): Promise<string> {
   return data.id;
 }
 
+async function getModelConfig(modelName: string): Promise<{ providerID: string, modelID: string } | null> {
+  try {
+    const res = await fetch(`${OPENCODE_URL}/config/providers`);
+    if (!res.ok) return null;
+    
+    const data = await res.json() as any;
+    const providers = data.providers || [];
+    
+    for (const provider of providers) {
+      const models = provider.models || {};
+      for (const [modelId, modelInfo] of Object.entries(models)) {
+        const m = modelInfo as any;
+        if (m.name === modelName || m.id === modelName) {
+          return { providerID: m.providerID, modelID: m.id };
+        }
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function sendPrompt(sessionId: string, parts: any[], model?: string, cwd?: string): Promise<string> {
   const body: any = { parts };
+  
   if (model) {
-    body.model = { providerID: "anthropic", modelID: model };
+    const modelConfig = await getModelConfig(model);
+    if (modelConfig) {
+      body.model = modelConfig;
+    } else {
+      body.model = { providerID: "opencode", modelID: model };
+    }
   }
+  
   if (cwd) {
     body.cwd = cwd;
   }
 
   const url = `${OPENCODE_URL}/session/${sessionId}/message`;
-  logger.info("Sending prompt", { sessionId, url, partsCount: parts.length });
+  logger.info("Sending prompt", { sessionId, url, partsCount: parts.length, model: body.model });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1_800_000); // 30 分钟超时
