@@ -1,5 +1,5 @@
 import { logger } from "../logger.js";
-import { execSync, spawn } from "node:child_process";
+import { execSync } from "node:child_process";
 
 export interface QueryOptions {
   prompt: string;
@@ -50,19 +50,23 @@ function startOpenCodeService(cwd?: string): void {
   
   const workDir = cwd || process.cwd();
   
-  if (process.platform === "win32") {
-    // Windows: 使用 cmd.exe 执行 opencode.cmd
-    const child = spawn('cmd.exe', ['/c', 'opencode', 'serve', '--hostname', '127.0.0.1', '--port', String(OPENCODE_PORT)], {
-      cwd: workDir,
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
-  } else {
-    execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
-      stdio: "ignore",
-      cwd: workDir,
-    });
+  try {
+    if (process.platform === "win32") {
+      // Windows: 使用 execSync 后台启动
+      execSync(`start /b opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`, {
+        cwd: workDir,
+        stdio: 'ignore',
+        shell: process.env.COMSPEC || 'cmd.exe',
+      });
+    } else {
+      execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
+        stdio: "ignore",
+        cwd: workDir,
+      });
+    }
+  } catch (e) {
+    // 忽略错误，稍后会检查服务是否启动
+    logger.warn("Start command failed, will check if service started anyway");
   }
 }
 
