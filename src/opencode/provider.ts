@@ -52,18 +52,14 @@ function startOpenCodeService(cwd?: string): void {
   
   try {
     if (process.platform === "win32") {
-      // Windows: 使用 PowerShell bypass 执行策略
+      // Windows: 使用 cmd /c start 启动
       const { exec } = require('child_process');
-      const psCmd = `powershell -ExecutionPolicy Bypass -NoProfile -Command "Start-Process -FilePath opencode -ArgumentList 'serve','--hostname','127.0.0.1','--port','${OPENCODE_PORT}' -WorkingDirectory '${workDir.replace(/\\/g, '\\\\')}' -WindowStyle Hidden -PassThru"`;
-      exec(
-        psCmd,
-        { windowsHide: true },
-        (err: any) => {
-          if (err) {
-            logger.error("Failed to start OpenCode", { error: err.message });
-          }
+      const cmd = `cmd /c start /b opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`;
+      exec(cmd, { cwd: workDir }, (err: any) => {
+        if (err) {
+          logger.error("Failed to start OpenCode", { error: err.message });
         }
-      );
+      });
     } else {
       execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
         stdio: "ignore",
