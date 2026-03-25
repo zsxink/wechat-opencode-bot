@@ -98,7 +98,7 @@ async function runDaemon(): Promise<void> {
 
   console.log('正在连接 OpenCode 服务...');
   try {
-    await initOpenCode();
+    await initOpenCode(config.workingDirectory);
     console.log('✅ OpenCode 服务已连接');
   } catch (err) {
     console.error('\n' + (err instanceof Error ? err.message : String(err)));

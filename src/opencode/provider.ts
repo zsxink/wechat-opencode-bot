@@ -44,23 +44,27 @@ async function waitForService(url: string, maxAttempts: number = 30): Promise<bo
   return false;
 }
 
-function startOpenCodeService(): void {
-  logger.info("Starting OpenCode service", { port: OPENCODE_PORT });
+function startOpenCodeService(cwd?: string): void {
+  logger.info("Starting OpenCode service", { port: OPENCODE_PORT, cwd });
   console.log(`正在启动 OpenCode 服务 (端口: ${OPENCODE_PORT})...`);
+  
+  const workDir = cwd || process.cwd();
   
   if (process.platform === "win32") {
     execSync(`cmd /c start /b opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT}`, {
       stdio: "ignore",
       windowsHide: true,
+      cwd: workDir,
     });
   } else {
     execSync(`nohup opencode serve --hostname 127.0.0.1 --port ${OPENCODE_PORT} > /dev/null 2>&1 &`, {
       stdio: "ignore",
+      cwd: workDir,
     });
   }
 }
 
-export async function initOpenCode(): Promise<void> {
+export async function initOpenCode(cwd?: string): Promise<void> {
   try {
     const res = await fetch(`${OPENCODE_URL}/global/health`);
     if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
@@ -77,7 +81,7 @@ export async function initOpenCode(): Promise<void> {
     }
     
     console.log("OpenCode 已安装，但服务未启动");
-    startOpenCodeService();
+    startOpenCodeService(cwd);
     
     console.log("等待 OpenCode 服务启动...");
     const started = await waitForService(OPENCODE_URL);
