@@ -127,12 +127,13 @@ export async function initOpenCode(cwd?: string): Promise<void> {
 async function createSession(title: string, cwd?: string): Promise<string> {
   logger.info("Creating OpenCode session", { title, cwd });
   const body: any = { title };
-  
+
   let url = `${OPENCODE_URL}/session`;
   if (cwd) {
-    url += `?directory=${encodeURIComponent(cwd)}`;
+    const normalizedPath = cwd.replace(/\//g, '\\');
+    url += `?directory=${encodeURIComponent(normalizedPath)}`;
   }
-  
+
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -151,23 +152,24 @@ async function createSession(title: string, cwd?: string): Promise<string> {
 
 async function listSessions(cwd?: string): Promise<Array<{id: string, title: string, directory: string, time: {created: number, updated: number}}>> {
   logger.info("Listing OpenCode sessions", { cwd });
-  
+
   let url = `${OPENCODE_URL}/session`;
   if (cwd) {
-    url += `?directory=${encodeURIComponent(cwd)}`;
+    const normalizedPath = cwd.replace(/\//g, '\\');
+    url += `?directory=${encodeURIComponent(normalizedPath)}`;
   }
-  
+
   const res = await fetch(url, {
     method: "GET",
     headers: { "Accept": "application/json" },
   });
-  
+
   if (!res.ok) {
     const text = await res.text();
     logger.error("Session list failed", { status: res.status, body: text });
     throw new Error(`Failed to list sessions: ${res.status} - ${text}`);
   }
-  
+
   const sessions = await res.json() as any;
   logger.info("Sessions listed", { count: sessions.length });
   return sessions;

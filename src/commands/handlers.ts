@@ -43,11 +43,11 @@ export function handleClear(ctx: CommandContext): CommandResult {
   return { reply: '✅ 会话已清除，下次消息将开始新会话。', handled: true };
 }
 
-export async function handleNew(ctx: CommandContext): Promise<CommandResult> {
+export async function handleNew(ctx: CommandContext, args: string): Promise<CommandResult> {
   ctx.rejectPendingPermission?.();
 
   const cwd = ctx.session.workingDirectory;
-  const title = `Wechat-${Date.now()}`;
+  const title = args.trim() || `Wechat-${Date.now()}`;
 
   try {
     const newSessionId = await createSession(title, cwd);

@@ -64,7 +64,7 @@ export async function routeCommand(ctx: CommandContext): Promise<CommandResult> 
     case 'status':
       return handleStatus(ctx);
     case 'new':
-      return await handleNew(ctx);
+      return await handleNew(ctx, args);
     case 'skills':
       return await handleSkills(ctx);
     case 'history':
