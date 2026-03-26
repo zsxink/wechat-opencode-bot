@@ -73,7 +73,7 @@ npm run daemon:status   # Check running status
 | `/clear` | Clear current session |
 | `/new [title]` | Create new session (clear context), optional title |
 | `/sessions` | List OpenCode sessions in current directory |
-| `/session <ID>` | Switch to specified session |
+| `/session <n|ID>` | Switch to session by number (1-based) or ID |
 | `/compact` | Compact context (start new SDK session, keep history) |
 | `/history [n]` | View chat history (default last 20) |
 | `/undo [n]` | Undo last n messages (default 1) |

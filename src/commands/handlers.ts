@@ -17,7 +17,7 @@ const HELP_TEXT = `可用命令：
   /history [数量]   查看对话记录（默认最近20条）
   /undo [数量]      撤销最近对话（默认1条）
   /sessions         查看当前目录的 OpenCode 会话列表
-  /session <ID>     切换到指定会话
+  /session <序号|ID> 切换到指定会话（序号从1开始）
 
 工作目录：
   /cwd [路径]       切换工作目录（支持相对路径、绝对路径）
