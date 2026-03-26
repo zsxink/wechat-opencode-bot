@@ -79,7 +79,7 @@ export async function routeCommand(ctx: CommandContext): Promise<CommandResult> 
     case 'sessions':
       return await handleSessions(ctx);
     case 'session':
-      return handleSession(ctx, args);
+      return await handleSession(ctx, args);
     default:
       return handleUnknown(cmd, args);
   }

@@ -345,24 +345,52 @@ export async function handleSessions(ctx: CommandContext): Promise<CommandResult
   }
 }
 
-export function handleSession(ctx: CommandContext, args: string): CommandResult {
+export async function handleSession(ctx: CommandContext, args: string): Promise<CommandResult> {
+  const currentCwd = ctx.session.workingDirectory;
+
   if (!args) {
-    const currentCwd = ctx.session.workingDirectory;
-    const currentSessionId = ctx.session.sdkSessionId;
-    
-    return { 
-      reply: `当前目录: ${currentCwd}\n当前会话ID: ${currentSessionId || '无'}\n\n用法: /session <会话ID>`, 
-      handled: true 
+    return {
+      reply: `当前目录: ${currentCwd}\n当前会话ID: ${ctx.session.sdkSessionId || '无'}\n\n用法: /session <序号|会话ID>`,
+      handled: true
     };
   }
 
-  const targetSessionId = args.trim();
-  
-  ctx.updateSession({ sdkSessionId: targetSessionId });
-  
-  return { 
-    reply: `✅ 已切换到会话ID: ${targetSessionId}`, 
-    handled: true 
+  const arg = args.trim();
+
+  if (/^\d+$/.test(arg)) {
+    const index = parseInt(arg, 10);
+    if (index < 1) {
+      return { reply: '⚠️ 序号必须大于 0', handled: true };
+    }
+
+    try {
+      const sessions = await listSessions(currentCwd);
+      if (sessions.length === 0) {
+        return { reply: '⚠️ 当前目录暂无会话，请先使用 /new 创建', handled: true };
+      }
+
+      const listIndex = index - 1;
+      if (listIndex >= sessions.length) {
+        return { reply: `⚠️ 序号超出范围，当前目录共有 ${sessions.length} 个会话`, handled: true };
+      }
+
+      const targetSession = sessions[listIndex];
+      ctx.updateSession({ sdkSessionId: targetSession.id });
+
+      return {
+        reply: `✅ 已切换到会话 [${index}] ${targetSession.title}\n会话ID: ${targetSession.id}`,
+        handled: true
+      };
+    } catch (err) {
+      return { reply: `⚠️ 获取会话列表失败: ${String(err)}`, handled: true };
+    }
+  }
+
+  ctx.updateSession({ sdkSessionId: arg });
+
+  return {
+    reply: `✅ 已切换到会话ID: ${arg}`,
+    handled: true
   };
 }
 
